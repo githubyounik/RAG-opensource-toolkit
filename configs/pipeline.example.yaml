@@ -1,0 +1,10 @@
+pipeline:
+  name: default_rag_pipeline
+  steps:
+    - indexing
+    - pre_retrieval
+    - retrieval
+    - post_retrieval
+    - generation
+    - evaluation
+
