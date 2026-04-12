@@ -6,6 +6,19 @@ from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
+class ParsedFile:
+    """Unified output of any FileLoader.
+
+    ``pages`` holds the raw text extracted from each page or section of the
+    source file, preserving the original structure before any preprocessing.
+    """
+
+    source: str
+    pages: list[str]
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class Query:
     text: str
     metadata: dict[str, object] = field(default_factory=dict)
