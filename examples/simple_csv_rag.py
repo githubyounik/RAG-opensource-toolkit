@@ -20,10 +20,11 @@ load_dotenv()
 
 from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
-from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
+from rag_toolkit.embeddings import EmbeddingIndexer, create_embedder_from_config
 from rag_toolkit.generation import create_generator_from_config
 from rag_toolkit.indexing import CSVLoader, create_text_processor_from_config
 from rag_toolkit.pipelines import RAGPipeline
+from rag_toolkit.pre_retrieval import create_pre_retriever_from_config
 from rag_toolkit.retrieval import EmbeddingRetriever
 
 
@@ -38,17 +39,18 @@ def main() -> None:
     query_text = sys.argv[2]
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    if not openrouter_key:
-        raise SystemExit("Missing env var: OPENROUTER_API_KEY")
     zhipu_key = os.environ.get("ZHIPU_API_KEY")
 
     # Reuse the same config file as the PDF example so both file types are
     # controlled by one shared chunking configuration.
     config = load_pipeline_config()
+    embedding_config = config["embeddings"]
     document_processing_config = config["indexing"]["document_processing"]
+    pre_retrieval_config = config.get("pre_retrieval")
     generation_config = config["generation"]
-    chunk_size = int(document_processing_config["chunk_size"])
-    chunk_overlap = int(document_processing_config["chunk_overlap"])
+
+    if not openrouter_key:
+        raise SystemExit("Missing env var: OPENROUTER_API_KEY")
 
     print(f"Indexing {csv_path} ...")
 
@@ -59,7 +61,10 @@ def main() -> None:
         document_processing_config,
         openrouter_api_key=openrouter_key,
     )
-    embedder = OpenRouterEmbedder(api_key=openrouter_key)
+    embedder = create_embedder_from_config(
+        embedding_config,
+        openrouter_api_key=openrouter_key,
+    )
     indexer = EmbeddingIndexer(embedder)
 
     parsed = loader.load(csv_path)
@@ -68,6 +73,11 @@ def main() -> None:
     print(f"Indexed {len(index)} chunks.")
 
     pipeline = RAGPipeline(
+        pre_retriever=create_pre_retriever_from_config(
+            pre_retrieval_config,
+            openrouter_api_key=openrouter_key,
+            zhipu_api_key=zhipu_key,
+        ),
         retriever=EmbeddingRetriever(index=index, embedder=embedder, top_k=2),
         generator=create_generator_from_config(
             generation_config,

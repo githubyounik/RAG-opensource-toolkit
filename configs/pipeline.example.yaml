@@ -8,9 +8,15 @@ pipeline:
     - generation
     - evaluation
 
+embeddings:
+  provider: openrouter
+  model: perplexity/pplx-embed-v1-0.6b
+
 indexing:
   document_processing:
-    # strategy可以选default | proposition
+    # strategy可以选:
+    # - default: 普通固定长度切块，使用 DocumentProcessor
+    # - proposition: 先做基础切块，再用 LLM 拆成命题级小块，使用 PropositionProcessor
     strategy: proposition
     chunk_size: 1000
     chunk_overlap: 200
@@ -22,13 +28,22 @@ indexing:
       retry_delay_seconds: 2.0
 
 generation:
-  # zhipu example:
-  # provider: zhipu
-  # model: glm-4.7
-  # temperature: 0.6
-  # max_tokens:
-
-  # OpenRouter example:
   provider: openrouter
-  # model: google/gemma-4-26b-a4b-it:free
-  model: nvidia/nemotron-3-super-120b-a12b:free
+  model: z-ai/glm-5.1
+  temperature: 0.6
+  max_tokens:
+  max_retries: 2
+  retry_delay_seconds: 2.0
+
+pre_retrieval:
+  enabled: true
+  # strategy可以选:
+  # - rewrite: 把原始问题改写成更适合检索的查询
+  # - step_back: 把原始问题改写成更宽泛、更偏背景知识的查询
+  strategy: rewrite
+  provider: openrouter
+  model: z-ai/glm-5.1
+  temperature: 0.0
+  max_tokens: 256
+  max_retries: 2
+  retry_delay_seconds: 2.0

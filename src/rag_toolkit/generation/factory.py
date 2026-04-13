@@ -26,6 +26,8 @@ def create_generator_from_config(
     model = str(generation_config["model"])
     temperature = float(generation_config.get("temperature", 0.6))
     max_tokens = generation_config.get("max_tokens")
+    max_retries = int(generation_config.get("max_retries", 2))
+    retry_delay_seconds = float(generation_config.get("retry_delay_seconds", 2.0))
 
     if provider == "zhipu":
         if not zhipu_api_key:
@@ -47,6 +49,8 @@ def create_generator_from_config(
             model=model,
             temperature=temperature,
             max_tokens=int(max_tokens) if max_tokens is not None else None,
+            max_retries=max_retries,
+            retry_delay_seconds=retry_delay_seconds,
         )
 
     raise ValueError(f"Unsupported generation provider: {provider}")

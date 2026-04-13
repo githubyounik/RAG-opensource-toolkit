@@ -11,10 +11,10 @@ class OpenRouterEmbedder(TextEmbedder):
     """Calls embedding models via OpenRouter's REST API.
 
     Uses multimodal content format required by models like
-    ``nvidia/llama-nemotron-embed-vl-1b-v2:free``.
+    ``perplexity/pplx-embed-v1-0.6b``.
     """
 
-    DEFAULT_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
+    DEFAULT_MODEL = "perplexity/pplx-embed-v1-0.6b"
     API_URL = "https://openrouter.ai/api/v1/embeddings"
 
     def __init__(

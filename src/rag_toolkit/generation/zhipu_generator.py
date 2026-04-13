@@ -1,9 +1,10 @@
-"""LLM generation using ZhipuAI GLM-4.7 via the zai-sdk."""
+"""LLM generation using a shared Zhipu chat client."""
 
 from __future__ import annotations
 
 from rag_toolkit.core.types import GenerationResult, RetrievalResult
 from rag_toolkit.generation.base import Generator
+from rag_toolkit.llm import ZhipuChatClient
 
 _SYSTEM_PROMPT = (
     "You are a helpful assistant. Answer the user's question using ONLY the provided "
@@ -13,19 +14,7 @@ _SYSTEM_PROMPT = (
 
 
 class ZhipuGenerator(Generator):
-    """Generate answers with GLM-4.5 via ZhipuAI.
-
-    Parameters
-    ----------
-    api_key:
-        Your ZhipuAI API key.
-    model:
-        Model name. Defaults to ``"glm-4.7"``.
-    temperature:
-        Sampling temperature (0–1). Defaults to ``0.6``.
-    max_tokens:
-        Maximum tokens in the generated answer. ``None`` uses the API default.
-    """
+    """Generate answers with GLM models via ZhipuAI."""
 
     def __init__(
         self,
@@ -35,16 +24,8 @@ class ZhipuGenerator(Generator):
         max_tokens: int | None = None,
     ) -> None:
         super().__init__()
-        try:
-            from zai import ZhipuAiClient
-        except ImportError as exc:
-            raise ImportError(
-                "zai-sdk is required for ZhipuGenerator. "
-                "Install it with: pip install zai-sdk"
-            ) from exc
-
-        self._client = ZhipuAiClient(api_key=api_key)
-        self.model = model
+        self._client = ZhipuChatClient(api_key=api_key, model=model)
+        self.model = self._client.model
         self.temperature = temperature
         self.max_tokens = max_tokens
 
@@ -64,32 +45,22 @@ class ZhipuGenerator(Generator):
         )
 
     def generate(self, result: RetrievalResult) -> GenerationResult:
-        """Call GLM-4.5 and return a :class:`GenerationResult`."""
+        """Call Zhipu chat completions and return a :class:`GenerationResult`."""
         prompt = self._build_prompt(result)
-
-        kwargs: dict = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": self.temperature,
-        }
-        if self.max_tokens is not None:
-            kwargs["max_tokens"] = self.max_tokens
-
-        response = self._client.chat.completions.create(**kwargs)
-        answer = response.choices[0].message.content
+        response = self._client.complete(
+            system_prompt=_SYSTEM_PROMPT,
+            user_prompt=prompt,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
 
         return GenerationResult(
             query=result.query,
-            answer=answer,
+            answer=response.text,
             contexts=list(result.documents),
             metadata={
+                "provider": "zhipu",
                 "model": self.model,
-                "usage": {
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                },
+                "usage": dict(response.usage),
             },
         )

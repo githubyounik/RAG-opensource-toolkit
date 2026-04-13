@@ -7,6 +7,7 @@ This repository is no longer only a framework skeleton. It now contains a minima
 - PDF loading
 - CSV loading
 - Text cleaning and chunking
+- Pre-retrieval query transformation
 - Embedding-based indexing
 - Embedding retrieval
 - LLM generation
@@ -19,9 +20,10 @@ The current codebase supports both PDF and CSV input, and both follow the same h
 ```text
 FileLoader
   -> configured TextProcessor
-  -> OpenRouterEmbedder
+  -> configured Embedder
   -> EmbeddingIndexer
   -> VectorIndex
+  -> optional configured PreRetriever
   -> EmbeddingRetriever
   -> configured Generator
   -> RAGPipeline
@@ -39,9 +41,10 @@ Example flow for a PDF file:
 ```text
 PDFLoader
   -> configured TextProcessor
-  -> OpenRouterEmbedder
+  -> configured Embedder
   -> EmbeddingIndexer
   -> VectorIndex
+  -> optional configured PreRetriever
   -> EmbeddingRetriever
   -> configured Generator
   -> RAGPipeline
@@ -52,9 +55,10 @@ Example flow for a CSV file:
 ```text
 CSVLoader
   -> configured TextProcessor
-  -> OpenRouterEmbedder
+  -> configured Embedder
   -> EmbeddingIndexer
   -> VectorIndex
+  -> optional configured PreRetriever
   -> EmbeddingRetriever
   -> configured Generator
   -> RAGPipeline
@@ -66,9 +70,10 @@ In plain language, the pipeline does this:
 2. Clean and split the text into chunks.
 3. Convert chunks into embeddings.
 4. Store chunk embeddings in an in-memory vector index.
-5. Embed the user query and retrieve the most similar chunks.
-6. Send the retrieved context to a generation model.
-7. Return the final answer through a unified pipeline interface.
+5. Optionally rewrite or broaden the user query before retrieval.
+6. Embed the query and retrieve the most similar chunks.
+7. Send the retrieved context to a generation model.
+8. Return the final answer through a unified pipeline interface.
 
 ## Module Overview
 
@@ -99,6 +104,7 @@ Responsible for file loading and turning raw files into document chunks.
 Responsible for dense vector creation and vector index construction.
 
 - `OpenRouterEmbedder`: calls embedding models through OpenRouter
+- `create_embedder_from_config`: chooses the embedding backend from the config file
 - `EmbeddingIndexer`: embeds document chunks and builds a `VectorIndex`
 - `VectorIndex`: in-memory storage for documents and their embeddings
 
@@ -116,13 +122,30 @@ Responsible for generating the final answer from retrieved context.
 - `OpenRouterGenerator`: sends retrieved context and query to an OpenRouter chat model
 - `create_generator_from_config`: chooses the generation backend from the config file
 
+### `pre_retrieval`
+
+Responsible for query transformation before retrieval.
+
+- `QueryRewritePreRetriever`: rewrites the original question into a more retrieval-friendly query
+- `StepBackPreRetriever`: rewrites the question into a broader background query
+- `QueryTransformer`: reusable query transformation helper built on the shared LLM layer
+- `create_pre_retriever_from_config`: chooses the pre-retrieval strategy from the config file
+
+### `llm`
+
+Shared provider layer reused by both `generation` and `pre_retrieval`.
+
+- `OpenRouterChatClient`: shared OpenRouter chat client with retry and delay handling
+- `ZhipuChatClient`: shared Zhipu chat client
+- `create_chat_llm_client`: chooses the provider client from config
+
 ### `pipelines`
 
 Responsible for chaining modules together.
 
 - `RAGPipeline`: standard orchestration entry for pre-retrieval, retrieval, post-retrieval, generation, and evaluation
 
-### `pre_retrieval`, `post_retrieval`, `evaluation`
+### `post_retrieval`, `evaluation`
 
 These modules currently keep their base interfaces and are reserved for later extension.
 
@@ -215,6 +238,50 @@ indexing:
 
 `proposition` first creates regular base chunks and then rewrites each chunk into proposition-sized documents through `PropositionProcessor`.
 
+## Embedding Configuration
+
+Embedding provider and model are configured through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current default:
+
+```yaml
+embeddings:
+  provider: openrouter
+  model: perplexity/pplx-embed-v1-0.6b
+```
+
+Right now the toolkit supports:
+
+- `openrouter`
+
+## Pre-Retrieval Configuration
+
+Pre-retrieval is optional and is configured through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current default:
+
+```yaml
+pre_retrieval:
+  enabled: true
+  strategy: rewrite
+  provider: openrouter
+  model: z-ai/glm-5.1
+  temperature: 0.0
+  max_tokens: 256
+  max_retries: 2
+  retry_delay_seconds: 2.0
+```
+
+Supported `strategy` values:
+
+- `rewrite`: rewrite the original question into a more retrieval-friendly query
+- `step_back`: rewrite the original question into a broader background query
+
+Supported `provider` values:
+
+- `openrouter`
+- `zhipu`
+
 ## Generation Model Configuration
 
 The generation provider and model are also controlled through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
@@ -224,7 +291,11 @@ Current default:
 ```yaml
 generation:
   provider: openrouter
-  model: nvidia/nemotron-3-super-120b-a12b:free
+  model: z-ai/glm-5.1
+  temperature: 0.6
+  max_tokens:
+  max_retries: 2
+  retry_delay_seconds: 2.0
 ```
 
 If you want to use Zhipu generation instead, you can switch it to:
@@ -242,9 +313,11 @@ If you want to use a different OpenRouter model, you can directly put the full m
 ```yaml
 generation:
   provider: openrouter
-  model: google/gemma-4-26b-a4b-it:free
+  model: z-ai/glm-5.1
   temperature: 0.6
   max_tokens:
+  max_retries: 2
+  retry_delay_seconds: 2.0
 ```
 
 The OpenRouter generator also includes retry logic with delay for transient failures such as `429 Too Many Requests`.
