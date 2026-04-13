@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from rag_toolkit.core.types import Document, Query, RetrievalResult
-from rag_toolkit.embeddings.client import OpenRouterEmbedder
+from rag_toolkit.embeddings.openrouter_embedder import OpenRouterEmbedder
 from rag_toolkit.embeddings.vector_index import VectorIndex
 from rag_toolkit.retrieval.base import Retriever
 

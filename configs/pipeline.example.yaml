@@ -12,3 +12,15 @@ indexing:
   document_processing:
     chunk_size: 1000
     chunk_overlap: 200
+
+generation:
+  # zhipu example:
+  # provider: zhipu
+  # model: glm-4.7
+  # temperature: 0.6
+  # max_tokens:
+
+  # OpenRouter example:
+  provider: openrouter
+  # model: google/gemma-4-26b-a4b-it:free
+  model: nvidia/nemotron-3-super-120b-a12b:free

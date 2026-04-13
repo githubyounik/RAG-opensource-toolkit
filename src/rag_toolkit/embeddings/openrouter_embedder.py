@@ -11,7 +11,7 @@ class OpenRouterEmbedder(TextEmbedder):
     """Calls embedding models via OpenRouter's REST API.
 
     Uses multimodal content format required by models like
-    nvidia/llama-nemotron-embed-vl-1b-v2:free.
+    ``nvidia/llama-nemotron-embed-vl-1b-v2:free``.
     """
 
     DEFAULT_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
@@ -32,8 +32,9 @@ class OpenRouterEmbedder(TextEmbedder):
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts. Returns one vector per input text."""
-        # Multimodal content format (text-only) required by this model family
-        inputs = [{"content": [{"type": "text", "text": t}]} for t in texts]
+        # The chosen OpenRouter embedding model expects the input in content-block
+        # format, even when we only send plain text.
+        inputs = [{"content": [{"type": "text", "text": text}]} for text in texts]
 
         response = httpx.post(
             self.API_URL,

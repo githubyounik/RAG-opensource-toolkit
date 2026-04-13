@@ -23,7 +23,7 @@ FileLoader
   -> EmbeddingIndexer
   -> VectorIndex
   -> EmbeddingRetriever
-  -> ZhipuGenerator
+  -> configured Generator
   -> RAGPipeline
 ```
 
@@ -43,7 +43,7 @@ PDFLoader
   -> EmbeddingIndexer
   -> VectorIndex
   -> EmbeddingRetriever
-  -> ZhipuGenerator
+  -> configured Generator
   -> RAGPipeline
 ```
 
@@ -56,7 +56,7 @@ CSVLoader
   -> EmbeddingIndexer
   -> VectorIndex
   -> EmbeddingRetriever
-  -> ZhipuGenerator
+  -> configured Generator
   -> RAGPipeline
 ```
 
@@ -111,6 +111,8 @@ Responsible for finding relevant chunks for a query.
 Responsible for generating the final answer from retrieved context.
 
 - `ZhipuGenerator`: sends retrieved context and query to a ZhipuAI GLM model
+- `OpenRouterGenerator`: sends retrieved context and query to an OpenRouter chat model
+- `create_generator_from_config`: chooses the generation backend from the config file
 
 ### `pipelines`
 
@@ -186,6 +188,40 @@ indexing:
 
 You can change these values to control how the `DocumentProcessor` splits text before embedding and retrieval.
 
+## Generation Model Configuration
+
+The generation provider and model are also controlled through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current default:
+
+```yaml
+generation:
+  provider: openrouter
+  model: nvidia/nemotron-3-super-120b-a12b:free
+```
+
+If you want to use Zhipu generation instead, you can switch it to:
+
+```yaml
+generation:
+  provider: zhipu
+  model: glm-4.7
+  temperature: 0.6
+  max_tokens:
+```
+
+If you want to use a different OpenRouter model, you can directly put the full model id in the config:
+
+```yaml
+generation:
+  provider: openrouter
+  model: google/gemma-4-26b-a4b-it:free
+  temperature: 0.6
+  max_tokens:
+```
+
+The OpenRouter generator also includes retry logic with delay for transient failures such as `429 Too Many Requests`.
+
 ## Run The Examples
 
 PDF example:
@@ -230,6 +266,8 @@ Current implemented path:
 - In-memory vector indexing is implemented
 - Cosine-similarity retrieval is implemented
 - Zhipu-based generation is implemented
+- OpenRouter-based generation is implemented
+- OpenRouter model selection is configurable from YAML
 
 Not yet expanded:
 

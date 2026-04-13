@@ -12,6 +12,7 @@ authors = [
   { name = "OpenAI Codex" }
 ]
 dependencies = [
+  "httpx>=0.28.0",
   "pypdf>=5.0.0",
   "PyYAML>=6.0",
 ]

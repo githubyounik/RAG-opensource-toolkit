@@ -4,7 +4,7 @@ This example intentionally reuses the same modular pipeline already used for
 PDF files:
 
 CSVLoader -> DocumentProcessor -> EmbeddingIndexer -> EmbeddingRetriever
--> ZhipuGenerator -> RAGPipeline
+-> configured Generator -> RAGPipeline
 
 The only file-type-specific component here is the loader.
 """
@@ -21,7 +21,7 @@ load_dotenv()
 from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
 from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
-from rag_toolkit.generation import ZhipuGenerator
+from rag_toolkit.generation import create_generator_from_config
 from rag_toolkit.indexing import CSVLoader, DocumentProcessor
 from rag_toolkit.pipelines import RAGPipeline
 from rag_toolkit.retrieval import EmbeddingRetriever
@@ -31,24 +31,22 @@ def main() -> None:
     if len(sys.argv) != 3:
         raise SystemExit(
             "Usage: python examples/simple_csv_rag.py <csv_path> \"<query>\"\n"
-            "Env vars required: OPENROUTER_API_KEY, ZHIPU_API_KEY"
+            "Env vars required depend on the configured generation provider."
         )
 
     csv_path = sys.argv[1]
     query_text = sys.argv[2]
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    zhipu_key = os.environ.get("ZHIPU_API_KEY")
-
     if not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")
-    if not zhipu_key:
-        raise SystemExit("Missing env var: ZHIPU_API_KEY")
+    zhipu_key = os.environ.get("ZHIPU_API_KEY")
 
     # Reuse the same config file as the PDF example so both file types are
     # controlled by one shared chunking configuration.
     config = load_pipeline_config()
     document_processing_config = config["indexing"]["document_processing"]
+    generation_config = config["generation"]
     chunk_size = int(document_processing_config["chunk_size"])
     chunk_overlap = int(document_processing_config["chunk_overlap"])
 
@@ -71,7 +69,11 @@ def main() -> None:
 
     pipeline = RAGPipeline(
         retriever=EmbeddingRetriever(index=index, embedder=embedder, top_k=2),
-        generator=ZhipuGenerator(api_key=zhipu_key),
+        generator=create_generator_from_config(
+            generation_config,
+            openrouter_api_key=openrouter_key,
+            zhipu_api_key=zhipu_key,
+        ),
     )
 
     generation_result, _ = pipeline.run(Query(text=query_text))
