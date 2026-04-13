@@ -1,4 +1,4 @@
-"""Base interfaces for indexing components."""
+"""Base interfaces for file loading and text preprocessing."""
 
 from __future__ import annotations
 
@@ -31,11 +31,3 @@ class TextProcessor(Component):
     @abstractmethod
     def process(self, parsed_file: ParsedFile) -> list[Document]:
         """Clean and chunk *parsed_file* into indexable Documents."""
-
-
-class IndexBuilder(Component):
-    """Builds or updates a retrieval index from documents."""
-
-    @abstractmethod
-    def build(self, documents: list[Document]) -> None:
-        """Build the index from a collection of documents."""

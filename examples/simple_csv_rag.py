@@ -1,0 +1,74 @@
+"""End-to-end RAG pipeline for CSV files.
+
+This example intentionally reuses the same modular pipeline already used for
+PDF files:
+
+CSVLoader -> DocumentProcessor -> EmbeddingIndexer -> EmbeddingRetriever
+-> ZhipuGenerator -> RAGPipeline
+
+The only file-type-specific component here is the loader.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from rag_toolkit.core.types import Query
+from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
+from rag_toolkit.generation import ZhipuGenerator
+from rag_toolkit.indexing import CSVLoader, DocumentProcessor
+from rag_toolkit.pipelines import RAGPipeline
+from rag_toolkit.retrieval import EmbeddingRetriever
+
+
+def main() -> None:
+    if len(sys.argv) != 3:
+        raise SystemExit(
+            "Usage: python examples/simple_csv_rag.py <csv_path> \"<query>\"\n"
+            "Env vars required: OPENROUTER_API_KEY, ZHIPU_API_KEY"
+        )
+
+    csv_path = sys.argv[1]
+    query_text = sys.argv[2]
+
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    zhipu_key = os.environ.get("ZHIPU_API_KEY")
+
+    if not openrouter_key:
+        raise SystemExit("Missing env var: OPENROUTER_API_KEY")
+    if not zhipu_key:
+        raise SystemExit("Missing env var: ZHIPU_API_KEY")
+
+    print(f"Indexing {csv_path} ...")
+
+    # Only the loader changes for CSV input. The rest of the pipeline stays
+    # identical to the existing PDF RAG flow.
+    loader = CSVLoader()
+    processor = DocumentProcessor(chunk_size=1000, chunk_overlap=200)
+    embedder = OpenRouterEmbedder(api_key=openrouter_key)
+    indexer = EmbeddingIndexer(embedder)
+
+    parsed = loader.load(csv_path)
+    documents = processor.process(parsed)
+    index = indexer.build(documents)
+    print(f"Indexed {len(index)} chunks.")
+
+    pipeline = RAGPipeline(
+        retriever=EmbeddingRetriever(index=index, embedder=embedder, top_k=2),
+        generator=ZhipuGenerator(api_key=zhipu_key),
+    )
+
+    generation_result, _ = pipeline.run(Query(text=query_text))
+
+    print("\n=== Answer ===")
+    print(generation_result.answer)
+
+
+if __name__ == "__main__":
+    main()
+
