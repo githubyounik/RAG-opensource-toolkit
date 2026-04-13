@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
 from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
 from rag_toolkit.generation import ZhipuGenerator
@@ -44,12 +45,22 @@ def main() -> None:
     if not zhipu_key:
         raise SystemExit("Missing env var: ZHIPU_API_KEY")
 
+    # Reuse the same config file as the PDF example so both file types are
+    # controlled by one shared chunking configuration.
+    config = load_pipeline_config()
+    document_processing_config = config["indexing"]["document_processing"]
+    chunk_size = int(document_processing_config["chunk_size"])
+    chunk_overlap = int(document_processing_config["chunk_overlap"])
+
     print(f"Indexing {csv_path} ...")
 
     # Only the loader changes for CSV input. The rest of the pipeline stays
     # identical to the existing PDF RAG flow.
     loader = CSVLoader()
-    processor = DocumentProcessor(chunk_size=1000, chunk_overlap=200)
+    processor = DocumentProcessor(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
     embedder = OpenRouterEmbedder(api_key=openrouter_key)
     indexer = EmbeddingIndexer(embedder)
 
@@ -71,4 +82,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

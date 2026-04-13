@@ -171,6 +171,21 @@ OPENROUTER_API_KEY=your-openrouter-key-here
 ZHIPU_API_KEY=your-zhipu-key-here
 ```
 
+## Chunking Configuration
+
+The chunking parameters are now configurable through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current settings:
+
+```yaml
+indexing:
+  document_processing:
+    chunk_size: 1000
+    chunk_overlap: 200
+```
+
+You can change these values to control how the `DocumentProcessor` splits text before embedding and retrieval.
+
 ## Run The Examples
 
 PDF example:

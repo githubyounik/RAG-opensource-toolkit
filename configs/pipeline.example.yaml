@@ -8,3 +8,7 @@ pipeline:
     - generation
     - evaluation
 
+indexing:
+  document_processing:
+    chunk_size: 1000
+    chunk_overlap: 200

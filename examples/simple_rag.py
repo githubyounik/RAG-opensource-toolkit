@@ -9,12 +9,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
 from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
+from rag_toolkit.generation import ZhipuGenerator
 from rag_toolkit.indexing import DocumentProcessor, PDFLoader
 from rag_toolkit.pipelines import RAGPipeline
 from rag_toolkit.retrieval import EmbeddingRetriever
-from rag_toolkit.generation import ZhipuGenerator
 
 
 def main() -> None:
@@ -35,9 +36,19 @@ def main() -> None:
     if not zhipu_key:
         raise SystemExit("Missing env var: ZHIPU_API_KEY")
 
+    # Read chunking parameters from the shared YAML config so they can be
+    # changed without editing Python code.
+    config = load_pipeline_config()
+    document_processing_config = config["indexing"]["document_processing"]
+    chunk_size = int(document_processing_config["chunk_size"])
+    chunk_overlap = int(document_processing_config["chunk_overlap"])
+
     print(f"Indexing {pdf_path} ...")
     loader = PDFLoader()
-    processor = DocumentProcessor(chunk_size=1000, chunk_overlap=200)
+    processor = DocumentProcessor(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
     embedder = OpenRouterEmbedder(api_key=openrouter_key)
     indexer = EmbeddingIndexer(embedder)
 
