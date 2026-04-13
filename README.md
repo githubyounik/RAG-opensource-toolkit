@@ -18,7 +18,7 @@ The current codebase supports both PDF and CSV input, and both follow the same h
 
 ```text
 FileLoader
-  -> DocumentProcessor
+  -> configured TextProcessor
   -> OpenRouterEmbedder
   -> EmbeddingIndexer
   -> VectorIndex
@@ -38,7 +38,7 @@ Example flow for a PDF file:
 
 ```text
 PDFLoader
-  -> DocumentProcessor
+  -> configured TextProcessor
   -> OpenRouterEmbedder
   -> EmbeddingIndexer
   -> VectorIndex
@@ -51,7 +51,7 @@ Example flow for a CSV file:
 
 ```text
 CSVLoader
-  -> DocumentProcessor
+  -> configured TextProcessor
   -> OpenRouterEmbedder
   -> EmbeddingIndexer
   -> VectorIndex
@@ -89,7 +89,9 @@ Responsible for file loading and turning raw files into document chunks.
 
 - `PDFLoader`: reads PDF files and returns `ParsedFile`
 - `CSVLoader`: reads CSV files and converts each row into readable text
-- `DocumentProcessor`: cleans text and splits it into overlapping chunks
+- `DocumentProcessor`: regular fixed-size chunking
+- `PropositionProcessor`: proposition-level chunking powered by an LLM
+- `create_text_processor_from_config`: chooses the chunking strategy from the config file
 - `FileLoader`, `TextProcessor`: base interfaces for indexing-related components
 
 ### `embeddings`
@@ -182,11 +184,36 @@ Current settings:
 ```yaml
 indexing:
   document_processing:
+    strategy: proposition
     chunk_size: 1000
     chunk_overlap: 200
+    proposition:
+      model: nvidia/nemotron-3-super-120b-a12b:free
+      temperature: 0.0
+      max_tokens: 512
+      max_retries: 2
+      retry_delay_seconds: 2.0
 ```
 
-You can change these values to control how the `DocumentProcessor` splits text before embedding and retrieval.
+You can switch chunking strategies through `indexing.document_processing.strategy`:
+
+```yaml
+indexing:
+  document_processing:
+    strategy: default
+```
+
+or
+
+```yaml
+indexing:
+  document_processing:
+    strategy: proposition
+```
+
+`default` uses regular fixed-size chunking through `DocumentProcessor`.
+
+`proposition` first creates regular base chunks and then rewrites each chunk into proposition-sized documents through `PropositionProcessor`.
 
 ## Generation Model Configuration
 
@@ -262,6 +289,7 @@ Current implemented path:
 - PDF loading is implemented
 - CSV loading is implemented
 - Chunk-based preprocessing is implemented
+- Proposition-based preprocessing is implemented
 - OpenRouter embedding is implemented
 - In-memory vector indexing is implemented
 - Cosine-similarity retrieval is implemented

@@ -13,7 +13,7 @@ from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
 from rag_toolkit.embeddings import EmbeddingIndexer, OpenRouterEmbedder
 from rag_toolkit.generation import create_generator_from_config
-from rag_toolkit.indexing import DocumentProcessor, PDFLoader
+from rag_toolkit.indexing import PDFLoader, create_text_processor_from_config
 from rag_toolkit.pipelines import RAGPipeline
 from rag_toolkit.retrieval import EmbeddingRetriever
 
@@ -43,9 +43,9 @@ def main() -> None:
 
     print(f"Indexing {pdf_path} ...")
     loader = PDFLoader()
-    processor = DocumentProcessor(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+    processor = create_text_processor_from_config(
+        document_processing_config,
+        openrouter_api_key=openrouter_key,
     )
     embedder = OpenRouterEmbedder(api_key=openrouter_key)
     indexer = EmbeddingIndexer(embedder)
