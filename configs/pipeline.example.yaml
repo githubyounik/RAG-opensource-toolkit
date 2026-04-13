@@ -40,6 +40,7 @@ pre_retrieval:
   # strategy可以选:
   # - rewrite: 把原始问题改写成更适合检索的查询
   # - step_back: 把原始问题改写成更宽泛、更偏背景知识的查询
+  # - hyde: 先生成一段假设性回答文档，再用这段文档去做向量检索
   strategy: rewrite
   provider: openrouter
   model: z-ai/glm-5.1
@@ -47,3 +48,5 @@ pre_retrieval:
   max_tokens: 256
   max_retries: 2
   retry_delay_seconds: 2.0
+  # 只在 strategy=hyde 时使用，用来提示假设文档的大致长度
+  hyde_target_char_length: 800

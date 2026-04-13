@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from rag_toolkit.pre_retrieval import (
+    HyDEPreRetriever,
     QueryRewritePreRetriever,
     StepBackPreRetriever,
     create_pre_retriever_from_config,
@@ -73,3 +74,21 @@ def test_pre_retrieval_factory_supports_zhipu() -> None:
         )
 
     assert isinstance(pre_retriever, QueryRewritePreRetriever)
+
+
+def test_pre_retrieval_factory_creates_hyde_component() -> None:
+    pre_retriever = create_pre_retriever_from_config(
+        {
+            "enabled": True,
+            "strategy": "hyde",
+            "provider": "openrouter",
+            "model": "z-ai/glm-5.1",
+            "temperature": 0.0,
+            "max_tokens": 256,
+            "hyde_target_char_length": 800,
+        },
+        openrouter_api_key="test-key",
+    )
+
+    assert isinstance(pre_retriever, HyDEPreRetriever)
+    assert pre_retriever.target_char_length == 800

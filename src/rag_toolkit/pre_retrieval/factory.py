@@ -6,6 +6,7 @@ from typing import Any
 
 from rag_toolkit.llm import create_chat_llm_client
 from rag_toolkit.pre_retrieval.base import PreRetriever
+from rag_toolkit.pre_retrieval.hyde import HyDEPreRetriever
 from rag_toolkit.pre_retrieval.query_rewrite import QueryRewritePreRetriever
 from rag_toolkit.pre_retrieval.query_transformer import QueryTransformer
 from rag_toolkit.pre_retrieval.step_back import StepBackPreRetriever
@@ -22,6 +23,7 @@ def create_pre_retriever_from_config(
     Supported strategies:
     - ``rewrite``
     - ``step_back``
+    - ``hyde``
     """
 
     if not pre_retrieval_config or not bool(pre_retrieval_config.get("enabled", False)):
@@ -48,5 +50,15 @@ def create_pre_retriever_from_config(
 
     if strategy == "step_back":
         return StepBackPreRetriever(transformer)
+
+    if strategy == "hyde":
+        return HyDEPreRetriever(
+            transformer,
+            target_char_length=(
+                int(pre_retrieval_config["hyde_target_char_length"])
+                if pre_retrieval_config.get("hyde_target_char_length") is not None
+                else None
+            ),
+        )
 
     raise ValueError(f"Unsupported pre-retrieval strategy: {strategy}")

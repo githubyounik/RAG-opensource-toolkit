@@ -128,6 +128,7 @@ Responsible for query transformation before retrieval.
 
 - `QueryRewritePreRetriever`: rewrites the original question into a more retrieval-friendly query
 - `StepBackPreRetriever`: rewrites the question into a broader background query
+- `HyDEPreRetriever`: generates a hypothetical answer document and uses it as retrieval text
 - `QueryTransformer`: reusable query transformation helper built on the shared LLM layer
 - `create_pre_retriever_from_config`: chooses the pre-retrieval strategy from the config file
 
@@ -270,17 +271,23 @@ pre_retrieval:
   max_tokens: 256
   max_retries: 2
   retry_delay_seconds: 2.0
+  hyde_target_char_length: 800
 ```
 
 Supported `strategy` values:
 
 - `rewrite`: rewrite the original question into a more retrieval-friendly query
 - `step_back`: rewrite the original question into a broader background query
+- `hyde`: generate a hypothetical answer document first, then use that document as the retrieval query
 
 Supported `provider` values:
 
 - `openrouter`
 - `zhipu`
+
+`hyde_target_char_length` is only used when `strategy: hyde`. It provides a
+soft length target for the hypothetical document so the generated text is
+closer to the size of indexed chunks.
 
 ## Generation Model Configuration
 

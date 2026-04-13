@@ -54,6 +54,44 @@ class OpenRouterChatClient(ChatLLMClient):
             payload["max_tokens"] = max_tokens
         return payload
 
+    def _extract_message_text(self, response_json: dict[str, object]) -> str:
+        """Extract plain text content from an OpenRouter chat response.
+
+        Some models can return ``content = null`` when the completion is cut off,
+        when the model emitted reasoning but no final answer text, or when the
+        provider uses a slightly different response shape. In that case we raise
+        a clear error instead of failing later with an unhelpful attribute error.
+        """
+
+        try:
+            message = response_json["choices"][0]["message"]
+            content = message["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError(
+                "OpenRouter response did not contain a standard message.content field "
+                f"(model={self.model})."
+            ) from exc
+
+        if isinstance(content, str):
+            return content.strip()
+
+        finish_reason = response_json.get("choices", [{}])[0].get("finish_reason")
+        usage = response_json.get("usage", {})
+        reasoning_tokens = None
+        if isinstance(usage, dict):
+            completion_details = usage.get("completion_tokens_details", {})
+            if isinstance(completion_details, dict):
+                reasoning_tokens = completion_details.get("reasoning_tokens")
+
+        raise RuntimeError(
+            "OpenRouter response contained no text content "
+            f"(model={self.model}, finish_reason={finish_reason}, content_type="
+            f"{type(content).__name__}, reasoning_tokens={reasoning_tokens}). "
+            "The model may have spent tokens on reasoning without producing a final "
+            "text answer. Try increasing max_tokens or switching to a model that "
+            "returns plain text content."
+        )
+
     def complete(
         self,
         *,
@@ -101,7 +139,7 @@ class OpenRouterChatClient(ChatLLMClient):
                     )
 
                 response_json = response.json()
-                message = response_json["choices"][0]["message"]["content"].strip()
+                message = self._extract_message_text(response_json)
                 usage = response_json.get("usage", {})
 
                 return LLMResponse(
