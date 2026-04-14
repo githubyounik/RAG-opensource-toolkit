@@ -2,10 +2,12 @@
 # 1. embeddings 目前只需要 provider 和 model，不需要 temperature / max_tokens。
 # 2. generation、pre_retrieval、indexing.document_processing.proposition 这些会调用 LLM，
 #    所以可以配置 temperature、max_tokens、max_retries、retry_delay_seconds。
-# 3. post_retrieval.relevant_segment_extraction 不调用模型，所以不需要 model 或 temperature。
-# 4. post_retrieval.contextual_compression 会调用 LLM，所以需要 provider、model，
-#    也可以配置 temperature、max_tokens、max_retries、retry_delay_seconds。
-# 5. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
+# 3. post_retrieval 现在按 strategy 分组配置，只有当前 strategy 对应的小节会生效。
+# 4. post_retrieval.relevant_segment_extraction 不调用模型，所以不需要 model 或 temperature。
+# 5. post_retrieval.contextual_compression 和 post_retrieval.rerank_llm 会调用 LLM，
+#    所以需要 provider、model，也可以配置 temperature、max_tokens、max_retries、
+#    retry_delay_seconds。
+# 6. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
 #    会强制使用普通文档切块（strategy=default）且 chunk_overlap=0。
 #    这个覆盖在代码里执行，即使这里写了别的值也会被忽略。
 pipeline:
@@ -45,25 +47,39 @@ post_retrieval:
   # strategy 目前支持:
   # - relevant_segment_extraction: 在已检索块之间重建连续片段
   # - contextual_compression: 使用 LLM 压缩每个检索块，只保留与问题最相关的内容
+  # - rerank_llm: 使用 LLM 为检索结果重新打分并重排顺序
   strategy: relevant_segment_extraction
-  # irrelevant_chunk_penalty 越大，越不容易跨过中间不相关块去拼接长片段。
-  irrelevant_chunk_penalty: 0.2
-  # rank_decay 会给排名更高的检索块更大的加分。
-  rank_decay: 0.08
-  # max_segment_length 是单个片段允许包含的最大 chunk 数。
-  max_segment_length: 6
-  # overall_max_length 是所有输出片段允许覆盖的总 chunk 数上限。
-  overall_max_length: 12
-  # minimum_segment_value 是片段被保留所需的最低得分。
-  minimum_segment_value: 0.15
-  # contextual_compression 会调用 LLM，因此这些参数只在
-  # strategy=contextual_compression 时生效。
-  provider: openrouter
-  model: google/gemma-4-26b-a4b-it:free
-  temperature: 0.0
-  max_tokens: 256
-  max_retries: 2
-  retry_delay_seconds: 2.0
+  relevant_segment_extraction:
+    # irrelevant_chunk_penalty 越大，越不容易跨过中间不相关块去拼接长片段。
+    irrelevant_chunk_penalty: 0.2
+    # rank_decay 会给排名更高的检索块更大的加分。
+    rank_decay: 0.08
+    # max_segment_length 是单个片段允许包含的最大 chunk 数。
+    max_segment_length: 6
+    # overall_max_length 是所有输出片段允许覆盖的总 chunk 数上限。
+    overall_max_length: 12
+    # minimum_segment_value 是片段被保留所需的最低得分。
+    minimum_segment_value: 0.15
+  contextual_compression:
+    # contextual_compression 会调用 LLM，因此这些参数只在
+    # strategy=contextual_compression 时生效。
+    provider: openrouter
+    model: z-ai/glm-5.1
+    temperature: 0.0
+    max_tokens: 1200
+    max_retries: 2
+    retry_delay_seconds: 2.0
+  rerank_llm:
+    # rerank_llm 会调用 LLM 给每个 query-document 对打 0-10 分。
+    provider: openrouter
+    model: z-ai/glm-5.1
+    temperature: 0.0
+    # 只输出一个分数，通常不需要太大的 token 上限。
+    max_tokens: 32
+    max_retries: 2
+    retry_delay_seconds: 2.0
+    # top_k 表示重排序后最多保留多少条结果；为空则保留全部。
+    top_k: 3
 
 generation:
   # generation 会调用 LLM，因此 temperature / max_tokens 等参数会生效。

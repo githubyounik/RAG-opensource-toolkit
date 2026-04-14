@@ -154,6 +154,7 @@ Responsible for chaining modules together.
 
 - `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
 - `ContextualCompressor`: compresses each retrieved chunk down to only the query-relevant content
+- `LLMReranker`: uses an LLM to rescore retrieved chunks and reorder them
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
 
 ## Project Layout
@@ -305,32 +306,41 @@ Current example:
 post_retrieval:
   enabled: false
   strategy: relevant_segment_extraction
-  irrelevant_chunk_penalty: 0.2
-  rank_decay: 0.08
-  max_segment_length: 6
-  overall_max_length: 12
-  minimum_segment_value: 0.15
-  provider: openrouter
-  model: z-ai/glm-5.1
-  temperature: 0.0
-  max_tokens: 1200
-  max_retries: 2
-  retry_delay_seconds: 2.0
+  relevant_segment_extraction:
+    irrelevant_chunk_penalty: 0.2
+    rank_decay: 0.08
+    max_segment_length: 6
+    overall_max_length: 12
+    minimum_segment_value: 0.15
+  contextual_compression:
+    provider: openrouter
+    model: z-ai/glm-5.1
+    temperature: 0.0
+    max_tokens: 1200
+    max_retries: 2
+    retry_delay_seconds: 2.0
+  rerank_llm:
+    provider: openrouter
+    model: z-ai/glm-5.1
+    temperature: 0.0
+    max_tokens: 32
+    max_retries: 2
+    retry_delay_seconds: 2.0
+    top_k: 3
 ```
 
 Supported `strategy` values:
 
 - `relevant_segment_extraction`: merge nearby relevant chunks into contiguous context segments
 - `contextual_compression`: use an LLM to compress each retrieved chunk to only the query-relevant content
+- `rerank_llm`: use an LLM to score each query-document pair and reorder retrieved chunks
 
 Key parameters:
 
-- `irrelevant_chunk_penalty`: penalty applied to chunks that were not retrieved directly
-- `rank_decay`: small bonus for higher-ranked retrieved chunks
-- `max_segment_length`: maximum number of chunks in one merged segment
-- `overall_max_length`: maximum total number of chunks returned across all segments
-- `minimum_segment_value`: minimum score required to keep a segment
-- `provider`, `model`, `temperature`, `max_tokens`, `max_retries`, `retry_delay_seconds`: only used when `strategy: contextual_compression`
+- `relevant_segment_extraction.*`: parameters used only when `strategy: relevant_segment_extraction`
+- `contextual_compression.*`: parameters used only when `strategy: contextual_compression`
+- `rerank_llm.*`: parameters used only when `strategy: rerank_llm`
+- `rerank_llm.top_k`: maximum number of documents kept after reranking
 
 Important constraint:
 
@@ -341,8 +351,8 @@ This constraint exists because Relevant Segment Extraction depends on clean,
 non-overlapping chunk boundaries so contiguous segments can be reconstructed
 reliably.
 
-For `contextual_compression`, there is no special chunking override. It works on
-the chunks returned by the retriever and compresses them after retrieval.
+For `contextual_compression` and `rerank_llm`, there is no special chunking
+override. They operate on the chunks returned by the retriever after retrieval.
 
 ## Generation Model Configuration
 
