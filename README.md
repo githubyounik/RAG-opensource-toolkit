@@ -148,14 +148,17 @@ Responsible for chaining modules together.
 
 ### `post_retrieval`, `evaluation`
 
-`evaluation` currently keeps its base interface and is reserved for later extension.
-
 `post_retrieval` now includes:
 
 - `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
 - `ContextualCompressor`: compresses each retrieved chunk down to only the query-relevant content
 - `CohereReranker`: calls OpenRouter's rerank API with a dedicated rerank model such as `cohere/rerank-v3.5`
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
+
+`evaluation` now includes:
+
+- `DeepEvalEvaluator`: DeepEval-style evaluation for correctness, faithfulness, and contextual relevancy
+- `create_evaluator_from_config`: chooses the evaluation strategy from the config file
 
 ## Project Layout
 
@@ -355,6 +358,38 @@ reliably.
 For `contextual_compression` and `rerank`, there is no special chunking
 override. They operate on the chunks returned by the retriever after retrieval.
 
+## Evaluation Configuration
+
+Evaluation is optional and is configured through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current example:
+
+```yaml
+evaluation:
+  enabled: false
+  strategy: deep_eval_style
+  provider: openrouter
+  model: z-ai/glm-5.1
+  temperature: 0.0
+  max_tokens: 256
+  correctness_threshold: 0.7
+  faithfulness_threshold: 0.7
+  contextual_relevancy_threshold: 0.7
+  max_retries: 2
+  retry_delay_seconds: 2.0
+```
+
+Supported `strategy` values:
+
+- `deep_eval_style`: evaluate correctness, faithfulness, and contextual relevancy with the shared LLM layer
+
+Important notes:
+
+- `correctness` requires `query.metadata["expected_output"]`
+- if no reference answer is provided, correctness is skipped automatically
+- `faithfulness` uses the retrieved contexts attached to `GenerationResult.contexts`
+- `contextual_relevancy` checks whether the retrieved contexts are useful for the query
+
 ## Generation Model Configuration
 
 The generation provider and model are also controlled through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
@@ -442,11 +477,11 @@ Current implemented path:
 - Zhipu-based generation is implemented
 - OpenRouter-based generation is implemented
 - OpenRouter model selection is configurable from YAML
+- DeepEval-style evaluation is implemented
 
 Not yet expanded:
 
 - Advanced pre-retrieval logic
 - Advanced post-retrieval logic
-- Rich evaluation implementations
 - Persistent vector databases
 - Multi-file ingestion workflows

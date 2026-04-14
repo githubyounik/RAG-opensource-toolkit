@@ -21,6 +21,7 @@ load_dotenv()
 from rag_toolkit.core import load_pipeline_config
 from rag_toolkit.core.types import Query
 from rag_toolkit.embeddings import EmbeddingIndexer, create_embedder_from_config
+from rag_toolkit.evaluation import create_evaluator_from_config
 from rag_toolkit.generation import create_generator_from_config
 from rag_toolkit.indexing import CSVLoader, create_text_processor_from_config
 from rag_toolkit.pipelines import RAGPipeline
@@ -49,6 +50,7 @@ def main() -> None:
     document_processing_config = config["indexing"]["document_processing"]
     pre_retrieval_config = config.get("pre_retrieval")
     post_retrieval_config = config.get("post_retrieval")
+    evaluation_config = config.get("evaluation")
     generation_config = config["generation"]
 
     if not openrouter_key:
@@ -95,6 +97,11 @@ def main() -> None:
         ),
         generator=create_generator_from_config(
             generation_config,
+            openrouter_api_key=openrouter_key,
+            zhipu_api_key=zhipu_key,
+        ),
+        evaluator=create_evaluator_from_config(
+            evaluation_config,
             openrouter_api_key=openrouter_key,
             zhipu_api_key=zhipu_key,
         ),
