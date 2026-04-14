@@ -13,6 +13,7 @@ def create_text_processor_from_config(
     document_processing_config: dict[str, Any],
     *,
     openrouter_api_key: str | None = None,
+    force_non_overlapping_default: bool = False,
 ) -> TextProcessor:
     """Create a text processor from the indexing config.
 
@@ -24,6 +25,10 @@ def create_text_processor_from_config(
     strategy = str(document_processing_config.get("strategy", "default")).lower()
     chunk_size = int(document_processing_config["chunk_size"])
     chunk_overlap = int(document_processing_config["chunk_overlap"])
+
+    if force_non_overlapping_default:
+        strategy = "default"
+        chunk_overlap = 0
 
     if strategy == "default":
         return DocumentProcessor(

@@ -148,7 +148,12 @@ Responsible for chaining modules together.
 
 ### `post_retrieval`, `evaluation`
 
-These modules currently keep their base interfaces and are reserved for later extension.
+`evaluation` currently keeps its base interface and is reserved for later extension.
+
+`post_retrieval` now includes:
+
+- `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
+- `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
 
 ## Project Layout
 
@@ -288,6 +293,44 @@ Supported `provider` values:
 `hyde_target_char_length` is only used when `strategy: hyde`. It provides a
 soft length target for the hypothetical document so the generated text is
 closer to the size of indexed chunks.
+
+## Post-Retrieval Configuration
+
+Post-retrieval is optional and is configured through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current example:
+
+```yaml
+post_retrieval:
+  enabled: false
+  strategy: relevant_segment_extraction
+  irrelevant_chunk_penalty: 0.2
+  rank_decay: 0.08
+  max_segment_length: 6
+  overall_max_length: 12
+  minimum_segment_value: 0.15
+```
+
+Supported `strategy` values:
+
+- `relevant_segment_extraction`: merge nearby relevant chunks into contiguous context segments
+
+Key parameters:
+
+- `irrelevant_chunk_penalty`: penalty applied to chunks that were not retrieved directly
+- `rank_decay`: small bonus for higher-ranked retrieved chunks
+- `max_segment_length`: maximum number of chunks in one merged segment
+- `overall_max_length`: maximum total number of chunks returned across all segments
+- `minimum_segment_value`: minimum score required to keep a segment
+
+Important constraint:
+
+- When `post_retrieval.enabled: true`, the toolkit will automatically force indexing to use `DocumentProcessor` with `chunk_overlap = 0`
+- This override happens in code even if the YAML file contains `strategy: proposition` or a non-zero overlap
+
+This constraint exists because Relevant Segment Extraction depends on clean,
+non-overlapping chunk boundaries so contiguous segments can be reconstructed
+reliably.
 
 ## Generation Model Configuration
 

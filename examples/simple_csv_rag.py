@@ -24,6 +24,7 @@ from rag_toolkit.embeddings import EmbeddingIndexer, create_embedder_from_config
 from rag_toolkit.generation import create_generator_from_config
 from rag_toolkit.indexing import CSVLoader, create_text_processor_from_config
 from rag_toolkit.pipelines import RAGPipeline
+from rag_toolkit.post_retrieval import create_post_retriever_from_config
 from rag_toolkit.pre_retrieval import create_pre_retriever_from_config
 from rag_toolkit.retrieval import EmbeddingRetriever
 
@@ -47,10 +48,13 @@ def main() -> None:
     embedding_config = config["embeddings"]
     document_processing_config = config["indexing"]["document_processing"]
     pre_retrieval_config = config.get("pre_retrieval")
+    post_retrieval_config = config.get("post_retrieval")
     generation_config = config["generation"]
 
     if not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")
+
+    rse_enabled = bool((post_retrieval_config or {}).get("enabled", False))
 
     print(f"Indexing {csv_path} ...")
 
@@ -60,6 +64,7 @@ def main() -> None:
     processor = create_text_processor_from_config(
         document_processing_config,
         openrouter_api_key=openrouter_key,
+        force_non_overlapping_default=rse_enabled,
     )
     embedder = create_embedder_from_config(
         embedding_config,
@@ -79,6 +84,10 @@ def main() -> None:
             zhipu_api_key=zhipu_key,
         ),
         retriever=EmbeddingRetriever(index=index, embedder=embedder, top_k=2),
+        post_retriever=create_post_retriever_from_config(
+            post_retrieval_config,
+            documents=index.documents,
+        ),
         generator=create_generator_from_config(
             generation_config,
             openrouter_api_key=openrouter_key,

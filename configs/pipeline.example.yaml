@@ -1,3 +1,10 @@
+# 说明：
+# 1. embeddings 目前只需要 provider 和 model，不需要 temperature / max_tokens。
+# 2. generation、pre_retrieval、indexing.document_processing.proposition 这些会调用 LLM，
+#    所以可以配置 temperature、max_tokens、max_retries、retry_delay_seconds。
+# 3. post_retrieval.relevant_segment_extraction 不调用模型，所以不需要 model 或 temperature。
+# 4. 当 post_retrieval.enabled=true 时，会强制使用普通文档切块（strategy=default）
+#    且 chunk_overlap=0。这个覆盖在代码里执行，即使这里写了别的值也会被忽略。
 pipeline:
   name: default_rag_pipeline
   steps:
@@ -9,41 +16,62 @@ pipeline:
     - evaluation
 
 embeddings:
+  # embeddings 只负责向量化，不需要 temperature。
   provider: openrouter
-  model: perplexity/pplx-embed-v1-0.6b
+  model: nvidia/llama-nemotron-embed-vl-1b-v2:free
 
 indexing:
   document_processing:
     # strategy可以选:
     # - default: 普通固定长度切块，使用 DocumentProcessor
     # - proposition: 先做基础切块，再用 LLM 拆成命题级小块，使用 PropositionProcessor
-    strategy: proposition
+    strategy: default
     chunk_size: 1000
     chunk_overlap: 200
     proposition:
+      # proposition 会调用 LLM 把基础块拆成命题块，所以这些参数只在
+      # strategy=proposition 时生效。
       model: nvidia/nemotron-3-super-120b-a12b:free
       temperature: 0.0
       max_tokens: 512
       max_retries: 2
       retry_delay_seconds: 2.0
 
+post_retrieval:
+  enabled: false
+  # strategy 目前支持:
+  # - relevant_segment_extraction: 在已检索块之间重建连续片段
+  strategy: relevant_segment_extraction
+  # irrelevant_chunk_penalty 越大，越不容易跨过中间不相关块去拼接长片段。
+  irrelevant_chunk_penalty: 0.2
+  # rank_decay 会给排名更高的检索块更大的加分。
+  rank_decay: 0.08
+  # max_segment_length 是单个片段允许包含的最大 chunk 数。
+  max_segment_length: 6
+  # overall_max_length 是所有输出片段允许覆盖的总 chunk 数上限。
+  overall_max_length: 12
+  # minimum_segment_value 是片段被保留所需的最低得分。
+  minimum_segment_value: 0.15
+
 generation:
+  # generation 会调用 LLM，因此 temperature / max_tokens 等参数会生效。
   provider: openrouter
-  model: z-ai/glm-5.1
+  model: google/gemma-4-26b-a4b-it:free
   temperature: 0.6
   max_tokens:
   max_retries: 2
   retry_delay_seconds: 2.0
 
 pre_retrieval:
-  enabled: true
+  enabled: false
   # strategy可以选:
   # - rewrite: 把原始问题改写成更适合检索的查询
   # - step_back: 把原始问题改写成更宽泛、更偏背景知识的查询
   # - hyde: 先生成一段假设性回答文档，再用这段文档去做向量检索
   strategy: rewrite
+  # pre_retrieval 会调用 LLM，因此 temperature / max_tokens 等参数会生效。
   provider: openrouter
-  model: z-ai/glm-5.1
+  model: google/gemma-4-26b-a4b-it:free
   temperature: 0.0
   max_tokens: 256
   max_retries: 2
