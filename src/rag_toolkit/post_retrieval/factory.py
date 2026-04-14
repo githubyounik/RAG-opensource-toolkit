@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from rag_toolkit.core.types import Document
+from rag_toolkit.llm import create_chat_llm_client
 from rag_toolkit.post_retrieval.base import PostRetriever
+from rag_toolkit.post_retrieval.contextual_compressor import ContextualCompressor
 from rag_toolkit.post_retrieval.relevant_segment_extractor import RelevantSegmentExtractor
 
 
@@ -13,6 +15,8 @@ def create_post_retriever_from_config(
     post_retrieval_config: dict[str, Any] | None,
     *,
     documents: list[Document],
+    openrouter_api_key: str | None = None,
+    zhipu_api_key: str | None = None,
 ) -> PostRetriever | None:
     """Create a post-retrieval component from config."""
 
@@ -34,6 +38,22 @@ def create_post_retriever_from_config(
             overall_max_length=int(post_retrieval_config.get("overall_max_length", 12)),
             minimum_segment_value=float(
                 post_retrieval_config.get("minimum_segment_value", 0.15)
+            ),
+        )
+
+    if strategy == "contextual_compression":
+        llm_client = create_chat_llm_client(
+            post_retrieval_config,
+            openrouter_api_key=openrouter_api_key,
+            zhipu_api_key=zhipu_api_key,
+        )
+        return ContextualCompressor(
+            llm_client,
+            temperature=float(post_retrieval_config.get("temperature", 0.0)),
+            max_tokens=(
+                int(post_retrieval_config["max_tokens"])
+                if post_retrieval_config.get("max_tokens") is not None
+                else 256
             ),
         )
 

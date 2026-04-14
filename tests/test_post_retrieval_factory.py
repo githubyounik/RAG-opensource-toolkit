@@ -1,5 +1,8 @@
+from unittest.mock import patch
+
 from rag_toolkit.core.types import Document
 from rag_toolkit.post_retrieval import (
+    ContextualCompressor,
     RelevantSegmentExtractor,
     create_post_retriever_from_config,
 )
@@ -28,3 +31,32 @@ def test_post_retrieval_factory_creates_relevant_segment_extractor() -> None:
     )
 
     assert isinstance(post_retriever, RelevantSegmentExtractor)
+
+
+def test_post_retrieval_factory_creates_contextual_compressor() -> None:
+    documents = [
+        Document(
+            doc_id="doc-0",
+            text="chunk 0",
+            metadata={"source": "doc", "chunk_id": 0, "start": 0, "end": 10},
+        )
+    ]
+
+    with patch(
+        "rag_toolkit.post_retrieval.factory.create_chat_llm_client",
+        return_value=object(),
+    ):
+        post_retriever = create_post_retriever_from_config(
+            {
+                "enabled": True,
+                "strategy": "contextual_compression",
+                "provider": "openrouter",
+                "model": "google/gemma-4-26b-a4b-it:free",
+                "temperature": 0.0,
+                "max_tokens": 256,
+            },
+            documents=documents,
+            openrouter_api_key="test-key",
+        )
+
+    assert isinstance(post_retriever, ContextualCompressor)

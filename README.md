@@ -153,6 +153,7 @@ Responsible for chaining modules together.
 `post_retrieval` now includes:
 
 - `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
+- `ContextualCompressor`: compresses each retrieved chunk down to only the query-relevant content
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
 
 ## Project Layout
@@ -309,11 +310,18 @@ post_retrieval:
   max_segment_length: 6
   overall_max_length: 12
   minimum_segment_value: 0.15
+  provider: openrouter
+  model: z-ai/glm-5.1
+  temperature: 0.0
+  max_tokens: 1200
+  max_retries: 2
+  retry_delay_seconds: 2.0
 ```
 
 Supported `strategy` values:
 
 - `relevant_segment_extraction`: merge nearby relevant chunks into contiguous context segments
+- `contextual_compression`: use an LLM to compress each retrieved chunk to only the query-relevant content
 
 Key parameters:
 
@@ -322,15 +330,19 @@ Key parameters:
 - `max_segment_length`: maximum number of chunks in one merged segment
 - `overall_max_length`: maximum total number of chunks returned across all segments
 - `minimum_segment_value`: minimum score required to keep a segment
+- `provider`, `model`, `temperature`, `max_tokens`, `max_retries`, `retry_delay_seconds`: only used when `strategy: contextual_compression`
 
 Important constraint:
 
-- When `post_retrieval.enabled: true`, the toolkit will automatically force indexing to use `DocumentProcessor` with `chunk_overlap = 0`
+- When `post_retrieval.enabled: true` and `strategy: relevant_segment_extraction`, the toolkit will automatically force indexing to use `DocumentProcessor` with `chunk_overlap = 0`
 - This override happens in code even if the YAML file contains `strategy: proposition` or a non-zero overlap
 
 This constraint exists because Relevant Segment Extraction depends on clean,
 non-overlapping chunk boundaries so contiguous segments can be reconstructed
 reliably.
+
+For `contextual_compression`, there is no special chunking override. It works on
+the chunks returned by the retriever and compresses them after retrieval.
 
 ## Generation Model Configuration
 

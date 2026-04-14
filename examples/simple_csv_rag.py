@@ -54,7 +54,10 @@ def main() -> None:
     if not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")
 
-    rse_enabled = bool((post_retrieval_config or {}).get("enabled", False))
+    post_retrieval_strategy = str((post_retrieval_config or {}).get("strategy", "")).lower()
+    rse_enabled = bool((post_retrieval_config or {}).get("enabled", False)) and (
+        post_retrieval_strategy == "relevant_segment_extraction"
+    )
 
     print(f"Indexing {csv_path} ...")
 
@@ -87,6 +90,8 @@ def main() -> None:
         post_retriever=create_post_retriever_from_config(
             post_retrieval_config,
             documents=index.documents,
+            openrouter_api_key=openrouter_key,
+            zhipu_api_key=zhipu_key,
         ),
         generator=create_generator_from_config(
             generation_config,
