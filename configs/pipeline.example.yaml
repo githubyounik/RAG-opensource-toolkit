@@ -4,10 +4,13 @@
 #    所以可以配置 temperature、max_tokens、max_retries、retry_delay_seconds。
 # 3. post_retrieval 现在按 strategy 分组配置，只有当前 strategy 对应的小节会生效。
 # 4. post_retrieval.relevant_segment_extraction 不调用模型，所以不需要 model 或 temperature。
-# 5. post_retrieval.contextual_compression 和 post_retrieval.rerank_llm 会调用 LLM，
-#    所以需要 provider、model，也可以配置 temperature、max_tokens、max_retries、
+# 5. post_retrieval.contextual_compression 会调用聊天模型，所以需要
+#    provider、model，也可以配置 temperature、max_tokens、max_retries、
 #    retry_delay_seconds。
-# 6. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
+# 6. post_retrieval.rerank 使用 OpenRouter 的专用 rerank API，不走聊天模型，
+#    因此不需要 temperature；它使用 provider、model、top_k、max_tokens_per_doc、
+#    max_retries、retry_delay_seconds。
+# 7. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
 #    会强制使用普通文档切块（strategy=default）且 chunk_overlap=0。
 #    这个覆盖在代码里执行，即使这里写了别的值也会被忽略。
 pipeline:
@@ -47,7 +50,7 @@ post_retrieval:
   # strategy 目前支持:
   # - relevant_segment_extraction: 在已检索块之间重建连续片段
   # - contextual_compression: 使用 LLM 压缩每个检索块，只保留与问题最相关的内容
-  # - rerank_llm: 使用 LLM 为检索结果重新打分并重排顺序
+  # - rerank: 使用专用 rerank 模型为 query-document 列表重新打分并重排顺序
   strategy: relevant_segment_extraction
   relevant_segment_extraction:
     # irrelevant_chunk_penalty 越大，越不容易跨过中间不相关块去拼接长片段。
@@ -69,17 +72,16 @@ post_retrieval:
     max_tokens: 1200
     max_retries: 2
     retry_delay_seconds: 2.0
-  rerank_llm:
-    # rerank_llm 会调用 LLM 给每个 query-document 对打 0-10 分。
+  rerank:
+    # rerank 使用 OpenRouter 的专用 rerank API，不是聊天模型，所以不需要 temperature。
     provider: openrouter
-    model: z-ai/glm-5.1
-    temperature: 0.0
-    # 只输出一个分数，通常不需要太大的 token 上限。
-    max_tokens: 32
-    max_retries: 2
-    retry_delay_seconds: 2.0
+    model: cohere/rerank-v3.5
     # top_k 表示重排序后最多保留多少条结果；为空则保留全部。
     top_k: 3
+    # max_tokens_per_doc 控制每个候选文档最多送入多少 token；为空则交给服务端默认值。
+    max_tokens_per_doc:
+    max_retries: 2
+    retry_delay_seconds: 2.0
 
 generation:
   # generation 会调用 LLM，因此 temperature / max_tokens 等参数会生效。

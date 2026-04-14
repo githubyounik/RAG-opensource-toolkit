@@ -154,7 +154,7 @@ Responsible for chaining modules together.
 
 - `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
 - `ContextualCompressor`: compresses each retrieved chunk down to only the query-relevant content
-- `LLMReranker`: uses an LLM to rescore retrieved chunks and reorder them
+- `CohereReranker`: calls OpenRouter's rerank API with a dedicated rerank model such as `cohere/rerank-v3.5`
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
 
 ## Project Layout
@@ -319,28 +319,29 @@ post_retrieval:
     max_tokens: 1200
     max_retries: 2
     retry_delay_seconds: 2.0
-  rerank_llm:
+  rerank:
     provider: openrouter
-    model: z-ai/glm-5.1
-    temperature: 0.0
-    max_tokens: 32
+    model: cohere/rerank-v3.5
+    top_k: 3
+    max_tokens_per_doc:
     max_retries: 2
     retry_delay_seconds: 2.0
-    top_k: 3
 ```
 
 Supported `strategy` values:
 
 - `relevant_segment_extraction`: merge nearby relevant chunks into contiguous context segments
 - `contextual_compression`: use an LLM to compress each retrieved chunk to only the query-relevant content
-- `rerank_llm`: use an LLM to score each query-document pair and reorder retrieved chunks
+- `rerank`: use OpenRouter's dedicated rerank endpoint to reorder retrieved chunks with a rerank model
 
 Key parameters:
 
 - `relevant_segment_extraction.*`: parameters used only when `strategy: relevant_segment_extraction`
 - `contextual_compression.*`: parameters used only when `strategy: contextual_compression`
-- `rerank_llm.*`: parameters used only when `strategy: rerank_llm`
-- `rerank_llm.top_k`: maximum number of documents kept after reranking
+- `rerank.*`: parameters used only when `strategy: rerank`
+- `rerank.top_k`: maximum number of documents kept after reranking
+- `rerank.max_tokens_per_doc`: optional per-document truncation budget passed to the rerank API
+- `rerank.model`: the rerank model name sent to OpenRouter, for example `cohere/rerank-v3.5`
 
 Important constraint:
 
@@ -351,7 +352,7 @@ This constraint exists because Relevant Segment Extraction depends on clean,
 non-overlapping chunk boundaries so contiguous segments can be reconstructed
 reliably.
 
-For `contextual_compression` and `rerank_llm`, there is no special chunking
+For `contextual_compression` and `rerank`, there is no special chunking
 override. They operate on the chunks returned by the retriever after retrieval.
 
 ## Generation Model Configuration

@@ -8,8 +8,8 @@ from rag_toolkit.core.types import Document
 from rag_toolkit.llm import create_chat_llm_client
 from rag_toolkit.post_retrieval.base import PostRetriever
 from rag_toolkit.post_retrieval.contextual_compressor import ContextualCompressor
-from rag_toolkit.post_retrieval.llm_reranker import LLMReranker
 from rag_toolkit.post_retrieval.relevant_segment_extractor import RelevantSegmentExtractor
+from rag_toolkit.post_retrieval.reranker import CohereReranker
 
 
 def _get_strategy_config(
@@ -71,25 +71,36 @@ def create_post_retriever_from_config(
             ),
         )
 
-    if strategy == "rerank_llm":
-        llm_client = create_chat_llm_client(
-            strategy_config,
-            openrouter_api_key=openrouter_api_key,
-            zhipu_api_key=zhipu_api_key,
-        )
-        return LLMReranker(
-            llm_client,
-            temperature=float(strategy_config.get("temperature", 0.0)),
-            max_tokens=(
-                int(strategy_config["max_tokens"])
-                if strategy_config.get("max_tokens") is not None
-                else 32
+    if strategy == "rerank":
+        provider = str(strategy_config.get("provider", "openrouter")).lower()
+        if provider != "openrouter":
+            raise ValueError(
+                "post_retrieval.rerank currently only supports provider='openrouter'."
+            )
+        if not openrouter_api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY is required when post_retrieval.strategy is 'rerank'."
+            )
+        return CohereReranker(
+            api_key=openrouter_api_key,
+            model=str(
+                strategy_config.get(
+                    "model",
+                    CohereReranker.DEFAULT_MODEL,
+                )
             ),
             top_k=(
                 int(strategy_config["top_k"])
                 if strategy_config.get("top_k") is not None
                 else None
             ),
+            max_tokens_per_doc=(
+                int(strategy_config["max_tokens_per_doc"])
+                if strategy_config.get("max_tokens_per_doc") is not None
+                else None
+            ),
+            max_retries=int(strategy_config.get("max_retries", 2)),
+            retry_delay_seconds=float(strategy_config.get("retry_delay_seconds", 2.0)),
         )
 
     raise ValueError(f"Unsupported post-retrieval strategy: {strategy}")

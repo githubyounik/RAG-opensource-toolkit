@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 from rag_toolkit.core.types import Document
 from rag_toolkit.post_retrieval import (
+    CohereReranker,
     ContextualCompressor,
-    LLMReranker,
     RelevantSegmentExtractor,
     create_post_retriever_from_config,
 )
@@ -67,7 +67,7 @@ def test_post_retrieval_factory_creates_contextual_compressor() -> None:
     assert isinstance(post_retriever, ContextualCompressor)
 
 
-def test_post_retrieval_factory_creates_llm_reranker() -> None:
+def test_post_retrieval_factory_creates_cohere_reranker() -> None:
     documents = [
         Document(
             doc_id="doc-0",
@@ -76,24 +76,19 @@ def test_post_retrieval_factory_creates_llm_reranker() -> None:
         )
     ]
 
-    with patch(
-        "rag_toolkit.post_retrieval.factory.create_chat_llm_client",
-        return_value=object(),
-    ):
-        post_retriever = create_post_retriever_from_config(
-            {
-                "enabled": True,
-                "strategy": "rerank_llm",
-                "rerank_llm": {
-                    "provider": "openrouter",
-                    "model": "z-ai/glm-5.1",
-                    "temperature": 0.0,
-                    "max_tokens": 32,
-                    "top_k": 3,
-                },
+    post_retriever = create_post_retriever_from_config(
+        {
+            "enabled": True,
+            "strategy": "rerank",
+            "rerank": {
+                "provider": "openrouter",
+                "model": "cohere/rerank-v3.5",
+                "top_k": 3,
             },
-            documents=documents,
-            openrouter_api_key="test-key",
-        )
+        },
+        documents=documents,
+        openrouter_api_key="test-key",
+    )
 
-    assert isinstance(post_retriever, LLMReranker)
+    assert isinstance(post_retriever, CohereReranker)
+    assert post_retriever.model == "cohere/rerank-v3.5"
