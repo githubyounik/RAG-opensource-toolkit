@@ -46,7 +46,7 @@ def main() -> None:
     generation_config = config["generation"]
 
     retrieval_strategy = str((retrieval_config or {}).get("strategy", "embedding")).lower()
-    embedding_required = retrieval_strategy == "embedding"
+    embedding_required = retrieval_strategy in {"embedding", "hybrid"}
 
     if embedding_required and not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")

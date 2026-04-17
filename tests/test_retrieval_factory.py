@@ -2,7 +2,12 @@ import pytest
 
 from rag_toolkit.core.types import Document
 from rag_toolkit.embeddings.vector_index import VectorIndex
-from rag_toolkit.retrieval import BM25Retriever, EmbeddingRetriever, create_retriever_from_config
+from rag_toolkit.retrieval import (
+    BM25Retriever,
+    EmbeddingRetriever,
+    HybridRetriever,
+    create_retriever_from_config,
+)
 
 
 class _StubEmbedder:
@@ -43,12 +48,45 @@ def test_retrieval_factory_creates_bm25_retriever() -> None:
     assert retriever.b == 0.6
 
 
+def test_retrieval_factory_creates_hybrid_retriever() -> None:
+    documents = [Document(doc_id="doc-1", text="alpha beta", metadata={})]
+    index = VectorIndex()
+    index.add(documents[0], [1.0])
+
+    retriever = create_retriever_from_config(
+        {
+            "strategy": "hybrid",
+            "embedding": {"top_k": 5},
+            "bm25": {"top_k": 6},
+            "hybrid": {"top_k": 3, "rrf_k": 42},
+        },
+        documents=documents,
+        index=index,
+        embedder=_StubEmbedder(),
+    )
+
+    assert isinstance(retriever, HybridRetriever)
+    assert retriever.top_k == 3
+    assert retriever.rrf_k == 42
+
+
 def test_retrieval_factory_requires_index_for_embedding() -> None:
     documents = [Document(doc_id="doc-1", text="alpha", metadata={})]
 
     with pytest.raises(ValueError, match="VectorIndex"):
         create_retriever_from_config(
             {"strategy": "embedding"},
+            documents=documents,
+            embedder=_StubEmbedder(),
+        )
+
+
+def test_retrieval_factory_requires_index_for_hybrid() -> None:
+    documents = [Document(doc_id="doc-1", text="alpha", metadata={})]
+
+    with pytest.raises(ValueError, match="VectorIndex"):
+        create_retriever_from_config(
+            {"strategy": "hybrid"},
             documents=documents,
             embedder=_StubEmbedder(),
         )

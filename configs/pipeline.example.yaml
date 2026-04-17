@@ -34,6 +34,7 @@ retrieval:
   # retrieval.strategy 目前支持:
   # - embedding: 使用 query embedding + 向量相似度检索
   # - bm25: 使用稀疏关键词 BM25 检索，不需要 embedding
+  # - hybrid: 同时运行 embedding 和 BM25，然后用 RRF 融合排序
   strategy: embedding
   embedding:
     top_k: 4
@@ -42,6 +43,9 @@ retrieval:
     k1: 1.5
     b: 0.75
     lowercase: true
+  hybrid:
+    top_k: 4
+    rrf_k: 60
 
 indexing:
   document_processing:

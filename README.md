@@ -11,6 +11,7 @@ This repository is no longer only a framework skeleton. It now contains a minima
 - Embedding-based indexing
 - Dense embedding retrieval
 - Sparse BM25 retrieval
+- Hybrid retrieval with RRF fusion
 - LLM generation
 - Pipeline orchestration
 
@@ -28,7 +29,7 @@ FileLoader
   -> RAGPipeline
 ```
 
-The retrieval layer now supports two paths:
+The retrieval layer now supports three paths:
 
 ```text
 Dense path:
@@ -49,6 +50,20 @@ FileLoader
   -> configured TextProcessor
   -> list[Document]
   -> BM25Retriever
+  -> configured Generator
+  -> RAGPipeline
+```
+
+```text
+Hybrid path:
+FileLoader
+  -> configured TextProcessor
+  -> list[Document]
+  -> configured Embedder
+  -> EmbeddingIndexer
+  -> VectorIndex
+  -> EmbeddingRetriever + BM25Retriever
+  -> HybridRetriever (RRF fusion)
   -> configured Generator
   -> RAGPipeline
 ```
@@ -91,7 +106,7 @@ In plain language, the pipeline does this:
 3. Optionally rewrite or broaden the user query before retrieval.
 4. Choose a retrieval strategy.
 5. For dense retrieval, convert chunks into embeddings and store them in an in-memory vector index.
-6. Retrieve relevant chunks with either embedding similarity or BM25 keyword matching.
+6. Retrieve relevant chunks with embedding similarity, BM25 keyword matching, or a hybrid of both.
 7. Send the retrieved context to a generation model.
 8. Return the final answer through a unified pipeline interface.
 
@@ -134,6 +149,7 @@ Responsible for finding relevant chunks for a query.
 
 - `EmbeddingRetriever`: embeds the query and ranks chunks by cosine similarity
 - `BM25Retriever`: tokenizes indexed chunks and ranks them with sparse BM25 scoring
+- `HybridRetriever`: runs both retrieval paths and fuses their rankings with Reciprocal Rank Fusion (RRF)
 - `create_retriever_from_config`: chooses the retrieval strategy from the config file
 
 ### `generation`
@@ -287,7 +303,7 @@ Right now the toolkit supports:
 
 - `openrouter`
 
-Embeddings are only required when `retrieval.strategy: embedding`.
+Embeddings are required when `retrieval.strategy: embedding` or `retrieval.strategy: hybrid`.
 
 ## Retrieval Configuration
 
@@ -305,12 +321,16 @@ retrieval:
     k1: 1.5
     b: 0.75
     lowercase: true
+  hybrid:
+    top_k: 4
+    rrf_k: 60
 ```
 
 Supported `strategy` values:
 
 - `embedding`: build an in-memory `VectorIndex`, embed the query, and retrieve by cosine similarity
 - `bm25`: skip embeddings entirely and retrieve directly from chunk text with BM25
+- `hybrid`: run both dense and sparse retrieval, then fuse the ranked lists with RRF
 
 Key parameters:
 
@@ -319,6 +339,8 @@ Key parameters:
 - `bm25.k1`: BM25 term-frequency saturation parameter
 - `bm25.b`: BM25 document-length normalization parameter
 - `bm25.lowercase`: whether document and query text are lowercased before tokenization
+- `hybrid.top_k`: number of chunks kept after fusion
+- `hybrid.rrf_k`: Reciprocal Rank Fusion constant used when combining the embedding and BM25 ranked lists
 
 ## Pre-Retrieval Configuration
 
@@ -530,6 +552,7 @@ Current implemented path:
 - In-memory vector indexing is implemented
 - Cosine-similarity retrieval is implemented
 - BM25 sparse retrieval is implemented
+- Hybrid retrieval with RRF fusion is implemented
 - Zhipu-based generation is implemented
 - OpenRouter-based generation is implemented
 - OpenRouter model selection is configurable from YAML
