@@ -27,7 +27,7 @@ from rag_toolkit.indexing import CSVLoader, create_text_processor_from_config
 from rag_toolkit.pipelines import RAGPipeline
 from rag_toolkit.post_retrieval import create_post_retriever_from_config
 from rag_toolkit.pre_retrieval import create_pre_retriever_from_config
-from rag_toolkit.retrieval import EmbeddingRetriever
+from rag_toolkit.retrieval import create_retriever_from_config
 
 
 def main() -> None:
@@ -49,11 +49,15 @@ def main() -> None:
     embedding_config = config["embeddings"]
     document_processing_config = config["indexing"]["document_processing"]
     pre_retrieval_config = config.get("pre_retrieval")
+    retrieval_config = config.get("retrieval")
     post_retrieval_config = config.get("post_retrieval")
     evaluation_config = config.get("evaluation")
     generation_config = config["generation"]
 
-    if not openrouter_key:
+    retrieval_strategy = str((retrieval_config or {}).get("strategy", "embedding")).lower()
+    embedding_required = retrieval_strategy == "embedding"
+
+    if embedding_required and not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")
 
     post_retrieval_strategy = str((post_retrieval_config or {}).get("strategy", "")).lower()
@@ -71,16 +75,20 @@ def main() -> None:
         openrouter_api_key=openrouter_key,
         force_non_overlapping_default=rse_enabled,
     )
-    embedder = create_embedder_from_config(
-        embedding_config,
-        openrouter_api_key=openrouter_key,
-    )
-    indexer = EmbeddingIndexer(embedder)
-
     parsed = loader.load(csv_path)
     documents = processor.process(parsed)
-    index = indexer.build(documents)
-    print(f"Indexed {len(index)} chunks.")
+    embedder = None
+    index = None
+    if embedding_required:
+        embedder = create_embedder_from_config(
+            embedding_config,
+            openrouter_api_key=openrouter_key,
+        )
+        indexer = EmbeddingIndexer(embedder)
+        index = indexer.build(documents)
+        print(f"Indexed {len(index)} chunks.")
+    else:
+        print(f"Prepared {len(documents)} chunks for BM25 retrieval.")
 
     pipeline = RAGPipeline(
         pre_retriever=create_pre_retriever_from_config(
@@ -88,10 +96,15 @@ def main() -> None:
             openrouter_api_key=openrouter_key,
             zhipu_api_key=zhipu_key,
         ),
-        retriever=EmbeddingRetriever(index=index, embedder=embedder, top_k=2),
+        retriever=create_retriever_from_config(
+            retrieval_config,
+            documents=documents,
+            index=index,
+            embedder=embedder,
+        ),
         post_retriever=create_post_retriever_from_config(
             post_retrieval_config,
-            documents=index.documents,
+            documents=documents,
             openrouter_api_key=openrouter_key,
             zhipu_api_key=zhipu_key,
         ),

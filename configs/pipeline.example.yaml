@@ -30,6 +30,19 @@ embeddings:
   provider: openrouter
   model: nvidia/llama-nemotron-embed-vl-1b-v2:free
 
+retrieval:
+  # retrieval.strategy 目前支持:
+  # - embedding: 使用 query embedding + 向量相似度检索
+  # - bm25: 使用稀疏关键词 BM25 检索，不需要 embedding
+  strategy: embedding
+  embedding:
+    top_k: 4
+  bm25:
+    top_k: 4
+    k1: 1.5
+    b: 0.75
+    lowercase: true
+
 indexing:
   document_processing:
     # strategy可以选:

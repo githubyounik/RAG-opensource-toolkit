@@ -9,7 +9,8 @@ This repository is no longer only a framework skeleton. It now contains a minima
 - Text cleaning and chunking
 - Pre-retrieval query transformation
 - Embedding-based indexing
-- Embedding retrieval
+- Dense embedding retrieval
+- Sparse BM25 retrieval
 - LLM generation
 - Pipeline orchestration
 
@@ -20,11 +21,34 @@ The current codebase supports both PDF and CSV input, and both follow the same h
 ```text
 FileLoader
   -> configured TextProcessor
+  -> list[Document]
+  -> optional configured PreRetriever
+  -> configured Retriever
+  -> configured Generator
+  -> RAGPipeline
+```
+
+The retrieval layer now supports two paths:
+
+```text
+Dense path:
+FileLoader
+  -> configured TextProcessor
+  -> list[Document]
   -> configured Embedder
   -> EmbeddingIndexer
   -> VectorIndex
-  -> optional configured PreRetriever
   -> EmbeddingRetriever
+  -> configured Generator
+  -> RAGPipeline
+```
+
+```text
+Sparse path:
+FileLoader
+  -> configured TextProcessor
+  -> list[Document]
+  -> BM25Retriever
   -> configured Generator
   -> RAGPipeline
 ```
@@ -41,11 +65,9 @@ Example flow for a PDF file:
 ```text
 PDFLoader
   -> configured TextProcessor
-  -> configured Embedder
-  -> EmbeddingIndexer
-  -> VectorIndex
+  -> list[Document]
   -> optional configured PreRetriever
-  -> EmbeddingRetriever
+  -> configured Retriever
   -> configured Generator
   -> RAGPipeline
 ```
@@ -55,11 +77,9 @@ Example flow for a CSV file:
 ```text
 CSVLoader
   -> configured TextProcessor
-  -> configured Embedder
-  -> EmbeddingIndexer
-  -> VectorIndex
+  -> list[Document]
   -> optional configured PreRetriever
-  -> EmbeddingRetriever
+  -> configured Retriever
   -> configured Generator
   -> RAGPipeline
 ```
@@ -68,10 +88,10 @@ In plain language, the pipeline does this:
 
 1. Load a source file and extract structured text.
 2. Clean and split the text into chunks.
-3. Convert chunks into embeddings.
-4. Store chunk embeddings in an in-memory vector index.
-5. Optionally rewrite or broaden the user query before retrieval.
-6. Embed the query and retrieve the most similar chunks.
+3. Optionally rewrite or broaden the user query before retrieval.
+4. Choose a retrieval strategy.
+5. For dense retrieval, convert chunks into embeddings and store them in an in-memory vector index.
+6. Retrieve relevant chunks with either embedding similarity or BM25 keyword matching.
 7. Send the retrieved context to a generation model.
 8. Return the final answer through a unified pipeline interface.
 
@@ -113,6 +133,8 @@ Responsible for dense vector creation and vector index construction.
 Responsible for finding relevant chunks for a query.
 
 - `EmbeddingRetriever`: embeds the query and ranks chunks by cosine similarity
+- `BM25Retriever`: tokenizes indexed chunks and ranks them with sparse BM25 scoring
+- `create_retriever_from_config`: chooses the retrieval strategy from the config file
 
 ### `generation`
 
@@ -264,6 +286,39 @@ embeddings:
 Right now the toolkit supports:
 
 - `openrouter`
+
+Embeddings are only required when `retrieval.strategy: embedding`.
+
+## Retrieval Configuration
+
+Retrieval is configured through [configs/pipeline.example.yaml](/home/test/Desktop/code/RAG-opensource-toolkit/configs/pipeline.example.yaml).
+
+Current example:
+
+```yaml
+retrieval:
+  strategy: embedding
+  embedding:
+    top_k: 4
+  bm25:
+    top_k: 4
+    k1: 1.5
+    b: 0.75
+    lowercase: true
+```
+
+Supported `strategy` values:
+
+- `embedding`: build an in-memory `VectorIndex`, embed the query, and retrieve by cosine similarity
+- `bm25`: skip embeddings entirely and retrieve directly from chunk text with BM25
+
+Key parameters:
+
+- `embedding.top_k`: number of chunks returned by dense retrieval
+- `bm25.top_k`: number of chunks returned by BM25
+- `bm25.k1`: BM25 term-frequency saturation parameter
+- `bm25.b`: BM25 document-length normalization parameter
+- `bm25.lowercase`: whether document and query text are lowercased before tokenization
 
 ## Pre-Retrieval Configuration
 
@@ -474,6 +529,7 @@ Current implemented path:
 - OpenRouter embedding is implemented
 - In-memory vector indexing is implemented
 - Cosine-similarity retrieval is implemented
+- BM25 sparse retrieval is implemented
 - Zhipu-based generation is implemented
 - OpenRouter-based generation is implemented
 - OpenRouter model selection is configurable from YAML
