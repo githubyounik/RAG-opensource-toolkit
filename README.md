@@ -105,7 +105,7 @@ In plain language, the pipeline does this:
 2. Clean and split the text into chunks.
 3. Optionally rewrite or broaden the user query before retrieval.
 4. Choose a retrieval strategy.
-5. For dense retrieval, convert chunks into embeddings and store them in an in-memory vector index.
+5. For dense retrieval, convert chunks into embeddings and store them in a FAISS vector index. When persistence is enabled, the index (including raw embeddings) is saved to disk and reused on subsequent runs with identical documents.
 6. Retrieve relevant chunks with embedding similarity, BM25 keyword matching, or a hybrid of both.
 7. Send the retrieved context to a generation model.
 8. Return the final answer through a unified pipeline interface.
@@ -140,8 +140,8 @@ Responsible for dense vector creation and vector index construction.
 
 - `OpenRouterEmbedder`: calls embedding models through OpenRouter
 - `create_embedder_from_config`: chooses the embedding backend from the config file
-- `EmbeddingIndexer`: embeds document chunks and builds a `VectorIndex`
-- `VectorIndex`: in-memory storage for documents and their embeddings
+- `EmbeddingIndexer`: embeds document chunks and builds a `VectorIndex`; also handles FAISS persistence via `build_or_load`
+- `VectorIndex`: in-memory storage for documents and their embeddings, backed by FAISS; supports `save`, `load`, and `load_all` for disk persistence
 
 ### `retrieval`
 
@@ -296,7 +296,11 @@ Current default:
 ```yaml
 embeddings:
   provider: openrouter
-  model: perplexity/pplx-embed-v1-0.6b
+  model: nvidia/llama-nemotron-embed-vl-1b-v2:free
+  storage:
+    enabled: true
+    cache_dir: .rag_cache/faiss
+    reuse_existing: true
 ```
 
 Right now the toolkit supports:
@@ -304,6 +308,35 @@ Right now the toolkit supports:
 - `openrouter`
 
 Embeddings are required when `retrieval.strategy: embedding` or `retrieval.strategy: hybrid`.
+
+## FAISS Index Persistence
+
+When `embeddings.storage.enabled: true`, the FAISS index is saved to disk after the first run and reused automatically on subsequent runs with identical documents, avoiding repeated embedding API calls.
+
+Each persisted index is stored under `{cache_dir}/{namespace}/{fingerprint}/` and consists of four files:
+
+```text
+index.faiss       — the FAISS flat inner-product index
+documents.json    — the aligned document chunks
+embeddings.npy    — the raw embedding vectors (numpy array)
+metadata.json     — document count, embedding count, and normalization flag
+```
+
+The fingerprint is a 16-character SHA-256 hash derived from the document content and the embedding model name. If either changes, a new index directory is created automatically.
+
+Key configuration parameters:
+
+- `storage.enabled`: set to `true` to enable persistence; `false` keeps everything in memory only
+- `storage.cache_dir`: root directory for all persisted indexes (default: `.rag_cache/faiss`)
+- `storage.reuse_existing`: when `true`, an existing index for the same documents and model is loaded instead of re-embedded
+
+When `storage.enabled: true`, you can also query without providing a PDF path. The example will load and merge all persisted indexes found under `cache_dir`:
+
+```bash
+PYTHONPATH=src python examples/simple_rag.py "<your question>"
+```
+
+This is useful for querying already-indexed content without re-loading the source file.
 
 ## Retrieval Configuration
 
@@ -557,10 +590,12 @@ Current implemented path:
 - OpenRouter-based generation is implemented
 - OpenRouter model selection is configurable from YAML
 - DeepEval-style evaluation is implemented
+- FAISS index persistence with raw embedding storage is implemented
+- Content-fingerprint-based cache reuse is implemented
+- Query-only mode (no input file required when cache exists) is implemented
 
 Not yet expanded:
 
 - Advanced pre-retrieval logic
 - Advanced post-retrieval logic
-- Persistent vector databases
 - Multi-file ingestion workflows
