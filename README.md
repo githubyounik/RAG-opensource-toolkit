@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README_CN.md)
+
 # RAG Open Source Toolkit
 
 A modular Python toolkit for building Retrieval-Augmented Generation (RAG) pipelines.
