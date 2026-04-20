@@ -49,15 +49,18 @@ class EmbeddingRetriever(Retriever):
         """Embed the query and return the top-k most similar documents."""
         query_embedding = self.embedder.embed_one(query.text)
 
-        scored: list[tuple[float, Document]] = []
-        for doc, doc_emb in zip(self.index.documents, self.index.embeddings):
-            score = _cosine_similarity(query_embedding, doc_emb)
-            scored_doc = Document(
-                doc_id=doc.doc_id,
-                text=doc.text,
-                metadata={**doc.metadata, "score": score},
-            )
-            scored.append((score, scored_doc))
+        if self.index.faiss_index is not None:
+            scored = self.index.search(query_embedding, self.top_k)
+        else:
+            scored: list[tuple[float, Document]] = []
+            for doc, doc_emb in zip(self.index.documents, self.index.embeddings):
+                score = _cosine_similarity(query_embedding, doc_emb)
+                scored_doc = Document(
+                    doc_id=doc.doc_id,
+                    text=doc.text,
+                    metadata={**doc.metadata, "score": score},
+                )
+                scored.append((score, scored_doc))
 
         scored.sort(key=lambda item: item[0], reverse=True)
         top_documents = [doc for _, doc in scored[: self.top_k]]
@@ -65,5 +68,9 @@ class EmbeddingRetriever(Retriever):
         return RetrievalResult(
             query=query,
             documents=top_documents,
-            metadata={"top_k": self.top_k, "index_size": len(self.index)},
+            metadata={
+                "top_k": self.top_k,
+                "index_size": len(self.index),
+                "faiss_enabled": self.index.faiss_index is not None,
+            },
         )

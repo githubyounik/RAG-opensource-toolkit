@@ -58,7 +58,7 @@ indexing:
 embeddings:
   # 远程示例：
   provider: openrouter
-  model: nvidia/llama-nemotron-embed-vl-1b-v2:free
+  model: perplexity/pplx-embed-v1-0.6b
   # 本地示例（取消注释即可切换）：
   # provider: local
   # model: BAAI/bge-small-en-v1.5
@@ -184,7 +184,7 @@ generation:
   # generation 会调用聊天 LLM，支持 openrouter / zhipu / local。
   # 远程示例：
   provider: openrouter
-  model: google/gemma-4-26b-a4b-it:free
+  model: z-ai/glm-5.1
   # 本地示例（取消注释即可切换）：
   # provider: local
   # model: Qwen/Qwen2.5-0.5B-Instruct

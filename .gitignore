@@ -10,3 +10,5 @@ build/
 venv/
 .mypy_cache/
 .ruff_cache/
+.rag_cache/
+run_logs/

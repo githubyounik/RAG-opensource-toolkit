@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -28,6 +29,7 @@ from rag_toolkit.pipelines import RAGPipeline
 from rag_toolkit.post_retrieval import create_post_retriever_from_config
 from rag_toolkit.pre_retrieval import create_pre_retriever_from_config
 from rag_toolkit.retrieval import create_retriever_from_config
+from rag_toolkit.run_logger import save_run_log
 
 
 def main() -> None:
@@ -56,6 +58,8 @@ def main() -> None:
 
     retrieval_strategy = str((retrieval_config or {}).get("strategy", "embedding")).lower()
     embedding_required = retrieval_strategy in {"embedding", "hybrid"}
+    storage_config = embedding_config.get("storage", {})
+    storage_enabled = embedding_required and bool(storage_config.get("enabled", False))
 
     if embedding_required and not openrouter_key:
         raise SystemExit("Missing env var: OPENROUTER_API_KEY")
@@ -85,8 +89,18 @@ def main() -> None:
             openrouter_api_key=openrouter_key,
         )
         indexer = EmbeddingIndexer(embedder)
-        index = indexer.build(documents)
-        print(f"Indexed {len(index)} chunks.")
+        if storage_enabled:
+            index, index_dir, loaded_from_disk = indexer.build_or_load(
+                documents,
+                cache_dir=str(storage_config.get("cache_dir", ".rag_cache/faiss")),
+                reuse_existing=bool(storage_config.get("reuse_existing", True)),
+                namespace=Path(csv_path).stem,
+            )
+            action = "Loaded" if loaded_from_disk else "Built"
+            print(f"{action} FAISS index with {len(index)} chunks: {index_dir}")
+        else:
+            index = indexer.build(documents)
+            print(f"Indexed {len(index)} chunks.")
     else:
         print(f"Prepared {len(documents)} chunks for BM25 retrieval.")
 
@@ -120,10 +134,18 @@ def main() -> None:
         ),
     )
 
-    generation_result, _ = pipeline.run(Query(text=query_text))
+    generation_result, evaluation_result = pipeline.run(Query(text=query_text))
 
     print("\n=== Answer ===")
     print(generation_result.answer)
+
+    log_file = save_run_log(
+        config=config,
+        query_text=query_text,
+        generation_result=generation_result,
+        evaluation_result=evaluation_result,
+    )
+    print(f"\n=== Run log saved to: {log_file} ===")
 
 
 if __name__ == "__main__":
