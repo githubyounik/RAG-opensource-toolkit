@@ -1,4 +1,4 @@
-"""Dedicated reranking component backed by OpenRouter's rerank API."""
+"""API-based reranking via OpenRouter's dedicated rerank endpoint."""
 
 from __future__ import annotations
 

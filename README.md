@@ -139,6 +139,7 @@ Responsible for file loading and turning raw files into document chunks.
 Responsible for dense vector creation and vector index construction.
 
 - `OpenRouterEmbedder`: calls embedding models through OpenRouter
+- `LocalEmbedder`: embeds texts using a local HuggingFace encoder model (no API key required)
 - `create_embedder_from_config`: chooses the embedding backend from the config file
 - `EmbeddingIndexer`: embeds document chunks and builds a `VectorIndex`; also handles FAISS persistence via `build_or_load`
 - `VectorIndex`: in-memory storage for documents and their embeddings, backed by FAISS; supports `save`, `load`, and `load_all` for disk persistence
@@ -172,10 +173,11 @@ Responsible for query transformation before retrieval.
 
 ### `llm`
 
-Shared provider layer reused by both `generation` and `pre_retrieval`.
+Shared provider layer reused by `generation`, `pre_retrieval`, `post_retrieval`, and `evaluation`.
 
 - `OpenRouterChatClient`: shared OpenRouter chat client with retry and delay handling
 - `ZhipuChatClient`: shared Zhipu chat client
+- `LocalChatClient`: runs chat completions using a local HuggingFace causal LM (no API key required)
 - `create_chat_llm_client`: chooses the provider client from config
 
 ### `pipelines`
@@ -191,6 +193,8 @@ Responsible for chaining modules together.
 - `RelevantSegmentExtractor`: reconstructs contiguous document segments from nearby retrieved chunks
 - `ContextualCompressor`: compresses each retrieved chunk down to only the query-relevant content
 - `CohereReranker`: calls OpenRouter's rerank API with a dedicated rerank model such as `cohere/rerank-v3.5`
+- `CrossReranker`: reranks chunks with a local HuggingFace cross-encoder model; tokenises each (query, document) pair together for high-accuracy relevance scoring
+- `BiReranker`: reranks chunks with a local HuggingFace bi-encoder model; encodes query and documents separately and ranks by dot-product similarity
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
 
 `evaluation` now includes:
@@ -303,9 +307,22 @@ embeddings:
     reuse_existing: true
 ```
 
-Right now the toolkit supports:
+Supported `provider` values:
 
-- `openrouter`
+- `openrouter`: calls the OpenRouter embeddings API; requires `OPENROUTER_API_KEY`
+- `local`: loads a HuggingFace encoder model locally; no API key required
+
+When using `provider: local`, additional parameters are available:
+
+```yaml
+embeddings:
+  provider: local
+  model: BAAI/bge-small-en-v1.5   # HuggingFace model ID or local path
+  max_length: 512
+  batch_size: 32
+  device: auto                     # auto / cpu / cuda
+  pooling_method: mean             # mean / cls
+```
 
 Embeddings are required when `retrieval.strategy: embedding` or `retrieval.strategy: hybrid`.
 
@@ -404,6 +421,7 @@ Supported `provider` values:
 
 - `openrouter`
 - `zhipu`
+- `local`: runs a local HuggingFace causal LM; add `device` and `max_length` to the same config block
 
 `hyde_target_char_length` is only used when `strategy: hyde`. It provides a
 soft length target for the hypothetical document so the generated text is
@@ -445,16 +463,42 @@ Supported `strategy` values:
 
 - `relevant_segment_extraction`: merge nearby relevant chunks into contiguous context segments
 - `contextual_compression`: use an LLM to compress each retrieved chunk to only the query-relevant content
-- `rerank`: use OpenRouter's dedicated rerank endpoint to reorder retrieved chunks with a rerank model
+- `rerank`: use OpenRouter's dedicated rerank endpoint to reorder retrieved chunks with a cloud rerank model
+- `cross_rerank`: reorder retrieved chunks with a local cross-encoder model (no API key required)
+- `bi_rerank`: reorder retrieved chunks with a local bi-encoder model (no API key required)
 
-Key parameters:
+Key parameters for `rerank`:
 
-- `relevant_segment_extraction.*`: parameters used only when `strategy: relevant_segment_extraction`
-- `contextual_compression.*`: parameters used only when `strategy: contextual_compression`
-- `rerank.*`: parameters used only when `strategy: rerank`
 - `rerank.top_k`: maximum number of documents kept after reranking
 - `rerank.max_tokens_per_doc`: optional per-document truncation budget passed to the rerank API
 - `rerank.model`: the rerank model name sent to OpenRouter, for example `cohere/rerank-v3.5`
+
+Key parameters for `cross_rerank` and `bi_rerank`:
+
+```yaml
+cross_rerank:
+  model: cross-encoder/ms-marco-MiniLM-L-6-v2  # HuggingFace model ID or local path
+  top_k: 3
+  max_length: 512
+  batch_size: 32
+  device: auto                                   # auto / cpu / cuda
+
+bi_rerank:
+  model: BAAI/bge-small-en-v1.5
+  top_k: 3
+  max_length: 512
+  batch_size: 32
+  device: auto
+  pooling_method: mean                           # mean / cls
+```
+
+Reranker comparison:
+
+| Strategy | Model location | Scoring method | Accuracy | Speed |
+|---|---|---|---|---|
+| `rerank` | Cloud API (OpenRouter) | Dedicated rerank service | High | Network-dependent |
+| `cross_rerank` | Local HuggingFace | (query + doc) encoded jointly, single relevance logit | High | Slower (one forward pass per pair) |
+| `bi_rerank` | Local HuggingFace | Query and doc encoded separately, ranked by dot product | Medium | Faster (embeddings are independent) |
 
 Important constraint:
 
@@ -465,8 +509,7 @@ This constraint exists because Relevant Segment Extraction depends on clean,
 non-overlapping chunk boundaries so contiguous segments can be reconstructed
 reliably.
 
-For `contextual_compression` and `rerank`, there is no special chunking
-override. They operate on the chunks returned by the retriever after retrieval.
+For all other strategies there is no special chunking override.
 
 ## Evaluation Configuration
 
@@ -538,6 +581,20 @@ generation:
   retry_delay_seconds: 2.0
 ```
 
+To use a local model for generation:
+
+```yaml
+generation:
+  provider: local
+  model: Qwen/Qwen2.5-0.5B-Instruct   # HuggingFace model ID or local path
+  device: auto
+  max_length: 2048
+  temperature: 0.6
+  max_tokens: 512
+```
+
+The `local` provider works the same way for `pre_retrieval`, `post_retrieval.contextual_compression`, and `evaluation` — just set `provider: local` and `model` in the corresponding config block.
+
 The OpenRouter generator also includes retry logic with delay for transient failures such as `429 Too Many Requests`.
 
 ## Run The Examples
@@ -593,9 +650,13 @@ Current implemented path:
 - FAISS index persistence with raw embedding storage is implemented
 - Content-fingerprint-based cache reuse is implemented
 - Query-only mode (no input file required when cache exists) is implemented
+- API-based reranking via OpenRouter (CohereReranker) is implemented
+- Local cross-encoder reranking (CrossReranker) is implemented
+- Local bi-encoder reranking (BiReranker) is implemented
+- Local HuggingFace model support for embeddings (LocalEmbedder) is implemented
+- Local HuggingFace model support for all LLM stages (LocalChatClient) is implemented
 
 Not yet expanded:
 
 - Advanced pre-retrieval logic
-- Advanced post-retrieval logic
 - Multi-file ingestion workflows

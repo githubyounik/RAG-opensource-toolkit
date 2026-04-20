@@ -1,19 +1,25 @@
 # 说明：
-# 1. embeddings 目前只需要 provider 和 model，不需要 temperature / max_tokens。
-# 2. generation、pre_retrieval、indexing.document_processing.proposition 这些会调用 LLM，
-#    所以可以配置 temperature、max_tokens、max_retries、retry_delay_seconds。
-# 3. post_retrieval 现在按 strategy 分组配置，只有当前 strategy 对应的小节会生效。
-# 4. post_retrieval.relevant_segment_extraction 不调用模型，所以不需要 model 或 temperature。
-# 5. post_retrieval.contextual_compression 会调用聊天模型，所以需要
-#    provider、model，也可以配置 temperature、max_tokens、max_retries、
-#    retry_delay_seconds。
+# 1. 所有使用模型的地方均支持三种 provider：
+#    - openrouter: 调用 OpenRouter 云端 API，需要 OPENROUTER_API_KEY
+#    - zhipu:      调用智谱 AI 云端 API，需要 ZHIPU_API_KEY（仅 generation / pre_retrieval）
+#    - local:      加载本地 HuggingFace 模型，不需要 API key；
+#                  model 填写 HuggingFace model ID（首次运行自动下载）或本地绝对路径。
+#                  local provider 额外支持：device（auto/cpu/cuda）、max_length、
+#                  batch_size（embeddings）、pooling_method（embeddings）。
+# 2. generation、pre_retrieval、indexing.document_processing.proposition、
+#    post_retrieval.contextual_compression 这些会调用聊天 LLM，
+#    所以可以配置 temperature、max_tokens；remote provider 还支持 max_retries、retry_delay_seconds。
+# 3. embeddings 只负责向量化，不需要 temperature / max_tokens。
+# 4. post_retrieval 现在按 strategy 分组配置，只有当前 strategy 对应的小节会生效。
+# 5. post_retrieval.relevant_segment_extraction 不调用模型，不需要 provider / model。
 # 6. post_retrieval.rerank 使用 OpenRouter 的专用 rerank API，不走聊天模型，
-#    因此不需要 temperature；它使用 provider、model、top_k、max_tokens_per_doc、
+#    因此不支持 local provider；它使用 provider、model、top_k、max_tokens_per_doc、
 #    max_retries、retry_delay_seconds。
-# 7. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
+# 7. post_retrieval.cross_rerank / bi_rerank 只支持本地模型，不需要 provider 字段。
+# 8. 当 post_retrieval.strategy=relevant_segment_extraction 且 enabled=true 时，
 #    会强制使用普通文档切块（strategy=default）且 chunk_overlap=0。
 #    这个覆盖在代码里执行，即使这里写了别的值也会被忽略。
-# 8. evaluation 会调用 LLM 做评估打分，因此需要 provider、model，也可以配置
+# 9. evaluation 会调用 LLM 做评估打分，因此需要 provider、model，也可以配置
 #    temperature、max_tokens，以及各项指标的通过阈值。
 pipeline:
   name: default_rag_pipeline
@@ -25,10 +31,69 @@ pipeline:
     - generation
     - evaluation
 
+indexing:
+  document_processing:
+    # strategy可以选:
+    # - default: 普通固定长度切块，使用 DocumentProcessor
+    # - proposition: 先做基础切块，再用 LLM 拆成命题级小块，使用 PropositionProcessor
+    strategy: default
+    chunk_size: 1000
+    chunk_overlap: 200
+    proposition:
+      # proposition 会调用 LLM 把基础块拆成命题块，所以这些参数只在
+      # strategy=proposition 时生效。
+      # 远程示例：
+      provider: openrouter
+      model: nvidia/nemotron-3-super-120b-a12b:free
+      # 本地示例（取消注释即可切换）：
+      # provider: local
+      # model: Qwen/Qwen2.5-0.5B-Instruct
+      # device: auto
+      # max_length: 2048
+      temperature: 0.0
+      max_tokens: 512
+      max_retries: 2
+      retry_delay_seconds: 2.0
+
 embeddings:
-  # embeddings 只负责向量化，不需要 temperature。
+  # 远程示例：
   provider: openrouter
   model: nvidia/llama-nemotron-embed-vl-1b-v2:free
+  # 本地示例（取消注释即可切换）：
+  # provider: local
+  # model: BAAI/bge-small-en-v1.5
+  # max_length: 512
+  # batch_size: 32
+  # device: auto
+  # pooling_method: mean
+  storage:
+    # enabled=true 时，会把 dense / hybrid 检索用到的向量索引保存为本地 FAISS 文件。
+    # 下次相同文档块和相同 embedding 模型会直接复用，避免重复 embedding。
+    enabled: true
+    cache_dir: .rag_cache/faiss
+    reuse_existing: true
+
+pre_retrieval:
+  enabled: false
+  # strategy可以选:
+  # - rewrite: 把原始问题改写成更适合检索的查询
+  # - step_back: 把原始问题改写成更宽泛、更偏背景知识的查询
+  # - hyde: 先生成一段假设性回答文档，再用这段文档去做向量检索
+  strategy: rewrite
+  # 远程示例：
+  provider: openrouter
+  model: google/gemma-4-26b-a4b-it:free
+  # 本地示例（取消注释即可切换）：
+  # provider: local
+  # model: Qwen/Qwen2.5-0.5B-Instruct
+  # device: auto
+  # max_length: 2048
+  temperature: 0.0
+  max_tokens: 256
+  max_retries: 2
+  retry_delay_seconds: 2.0
+  # 只在 strategy=hyde 时使用，用来提示假设文档的大致长度
+  hyde_target_char_length: 800
 
 retrieval:
   # retrieval.strategy 目前支持:
@@ -47,29 +112,14 @@ retrieval:
     top_k: 4
     rrf_k: 60
 
-indexing:
-  document_processing:
-    # strategy可以选:
-    # - default: 普通固定长度切块，使用 DocumentProcessor
-    # - proposition: 先做基础切块，再用 LLM 拆成命题级小块，使用 PropositionProcessor
-    strategy: default
-    chunk_size: 1000
-    chunk_overlap: 200
-    proposition:
-      # proposition 会调用 LLM 把基础块拆成命题块，所以这些参数只在
-      # strategy=proposition 时生效。
-      model: nvidia/nemotron-3-super-120b-a12b:free
-      temperature: 0.0
-      max_tokens: 512
-      max_retries: 2
-      retry_delay_seconds: 2.0
-
 post_retrieval:
   enabled: false
   # strategy 目前支持:
-  # - relevant_segment_extraction: 在已检索块之间重建连续片段
+  # - relevant_segment_extraction: 在已检索块之间重建连续片段（不调用模型）
   # - contextual_compression: 使用 LLM 压缩每个检索块，只保留与问题最相关的内容
-  # - rerank: 使用专用 rerank 模型为 query-document 列表重新打分并重排顺序
+  # - rerank: 使用 OpenRouter 专用 rerank API 重排序（仅支持 openrouter provider）
+  # - cross_rerank: 使用本地 cross-encoder 模型重排序
+  # - bi_rerank: 使用本地 bi-encoder 模型重排序
   strategy: relevant_segment_extraction
   relevant_segment_extraction:
     # irrelevant_chunk_penalty 越大，越不容易跨过中间不相关块去拼接长片段。
@@ -83,16 +133,22 @@ post_retrieval:
     # minimum_segment_value 是片段被保留所需的最低得分。
     minimum_segment_value: 0.15
   contextual_compression:
-    # contextual_compression 会调用 LLM，因此这些参数只在
-    # strategy=contextual_compression 时生效。
+    # contextual_compression 会调用聊天 LLM，支持 openrouter / zhipu / local。
+    # 远程示例：
     provider: openrouter
     model: z-ai/glm-5.1
+    # 本地示例（取消注释即可切换）：
+    # provider: local
+    # model: Qwen/Qwen2.5-0.5B-Instruct
+    # device: auto
+    # max_length: 2048
     temperature: 0.0
     max_tokens: 1200
     max_retries: 2
     retry_delay_seconds: 2.0
   rerank:
     # rerank 使用 OpenRouter 的专用 rerank API，不是聊天模型，所以不需要 temperature。
+    # 仅支持 provider: openrouter。
     provider: openrouter
     model: cohere/rerank-v3.5
     # top_k 表示重排序后最多保留多少条结果；为空则保留全部。
@@ -101,32 +157,43 @@ post_retrieval:
     max_tokens_per_doc:
     max_retries: 2
     retry_delay_seconds: 2.0
+  cross_rerank:
+    # cross_rerank 仅支持本地模型，不需要 provider / API key。
+    # model 填写 HuggingFace model ID 或本地路径。
+    model: cross-encoder/ms-marco-MiniLM-L-6-v2
+    # top_k 表示重排序后最多保留多少条结果；为空则保留全部。
+    top_k: 3
+    max_length: 512
+    batch_size: 32
+    # device: auto 会自动选择 cuda（如果可用）或 cpu；也可以手动指定 "cpu" 或 "cuda"。
+    device: auto
+  bi_rerank:
+    # bi_rerank 仅支持本地模型，不需要 provider / API key。
+    # model 填写 HuggingFace model ID 或本地路径。
+    model: BAAI/bge-small-en-v1.5
+    # top_k 表示重排序后最多保留多少条结果；为空则保留全部。
+    top_k: 3
+    max_length: 512
+    batch_size: 32
+    # device: auto 会自动选择 cuda（如果可用）或 cpu；也可以手动指定 "cpu" 或 "cuda"。
+    device: auto
+    # pooling_method: mean（对非 padding token 取均值）或 cls（取第一个 token）。
+    pooling_method: mean
 
 generation:
-  # generation 会调用 LLM，因此 temperature / max_tokens 等参数会生效。
+  # generation 会调用聊天 LLM，支持 openrouter / zhipu / local。
+  # 远程示例：
   provider: openrouter
   model: google/gemma-4-26b-a4b-it:free
+  # 本地示例（取消注释即可切换）：
+  # provider: local
+  # model: Qwen/Qwen2.5-0.5B-Instruct
+  # device: auto
+  # max_length: 2048
   temperature: 0.6
   max_tokens:
   max_retries: 2
   retry_delay_seconds: 2.0
-
-pre_retrieval:
-  enabled: false
-  # strategy可以选:
-  # - rewrite: 把原始问题改写成更适合检索的查询
-  # - step_back: 把原始问题改写成更宽泛、更偏背景知识的查询
-  # - hyde: 先生成一段假设性回答文档，再用这段文档去做向量检索
-  strategy: rewrite
-  # pre_retrieval 会调用 LLM，因此 temperature / max_tokens 等参数会生效。
-  provider: openrouter
-  model: google/gemma-4-26b-a4b-it:free
-  temperature: 0.0
-  max_tokens: 256
-  max_retries: 2
-  retry_delay_seconds: 2.0
-  # 只在 strategy=hyde 时使用，用来提示假设文档的大致长度
-  hyde_target_char_length: 800
 
 evaluation:
   enabled: false
@@ -134,8 +201,15 @@ evaluation:
   # - deep_eval_style: 对齐参考 notebook，评估 correctness、faithfulness、
   #   contextual_relevancy 三个指标
   strategy: deep_eval_style
+  # evaluation 会调用聊天 LLM，支持 openrouter / zhipu / local。
+  # 远程示例：
   provider: openrouter
   model: z-ai/glm-5.1
+  # 本地示例（取消注释即可切换）：
+  # provider: local
+  # model: Qwen/Qwen2.5-0.5B-Instruct
+  # device: auto
+  # max_length: 2048
   temperature: 0.0
   max_tokens: 256
   # correctness 依赖 query.metadata['expected_output']；如果没有提供，会自动跳过。

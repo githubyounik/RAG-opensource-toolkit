@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from rag_toolkit.llm.base import ChatLLMClient
+from rag_toolkit.llm.local_client import LocalChatClient
 from rag_toolkit.llm.openrouter_client import OpenRouterChatClient
 from rag_toolkit.llm.zhipu_client import ZhipuChatClient
 
@@ -15,7 +16,13 @@ def create_chat_llm_client(
     openrouter_api_key: str | None = None,
     zhipu_api_key: str | None = None,
 ) -> ChatLLMClient:
-    """Create a chat client from provider config."""
+    """Create a chat client from provider config.
+
+    Supported providers:
+    - ``openrouter``
+    - ``zhipu``
+    - ``local``
+    """
 
     provider = str(llm_config["provider"]).lower()
     model = str(llm_config["model"])
@@ -38,6 +45,13 @@ def create_chat_llm_client(
         return ZhipuChatClient(
             api_key=zhipu_api_key,
             model=model,
+        )
+
+    if provider == "local":
+        return LocalChatClient(
+            model=model,
+            device=str(llm_config.get("device", "auto")),
+            max_length=int(llm_config.get("max_length", 2048)),
         )
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
