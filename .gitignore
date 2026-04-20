@@ -12,3 +12,4 @@ venv/
 .ruff_cache/
 .rag_cache/
 run_logs/
+docs/
