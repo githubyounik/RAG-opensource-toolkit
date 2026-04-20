@@ -11,23 +11,8 @@ from __future__ import annotations
 
 from rag_toolkit.core.types import Query
 from rag_toolkit.pre_retrieval.base import PreRetriever
+from rag_toolkit.pre_retrieval.prompts import HYDE_SYSTEM_PROMPT_TEMPLATE as _SYSTEM_PROMPT_TEMPLATE
 from rag_toolkit.pre_retrieval.query_transformer import QueryTransformer
-
-_SYSTEM_PROMPT_TEMPLATE = """
-You are helping a Retrieval-Augmented Generation system perform HyDE
-(Hypothetical Document Embedding).
-
-Given a user question, write a hypothetical document that would likely contain
-the answer to that question.
-
-Requirements:
-1. Write in a factual, informative style.
-2. Include concrete details that would help semantic retrieval.
-3. Stay focused on the same topic and intent as the original question.
-4. Do not mention that the text is hypothetical.
-5. Return only the hypothetical document text.
-{length_instruction}
-""".strip()
 
 
 class HyDEPreRetriever(PreRetriever):

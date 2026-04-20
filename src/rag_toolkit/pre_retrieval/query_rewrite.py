@@ -4,19 +4,8 @@ from __future__ import annotations
 
 from rag_toolkit.core.types import Query
 from rag_toolkit.pre_retrieval.base import PreRetriever
+from rag_toolkit.pre_retrieval.prompts import REWRITE_SYSTEM_PROMPT as _SYSTEM_PROMPT
 from rag_toolkit.pre_retrieval.query_transformer import QueryTransformer
-
-_SYSTEM_PROMPT = """
-You improve search queries for retrieval in a RAG system.
-
-Rewrite the user's query so it is:
-1. More specific
-2. More retrieval-friendly
-3. Focused on the same original intent
-4. Written as a single search query
-
-Return only the rewritten query text.
-""".strip()
 
 
 class QueryRewritePreRetriever(PreRetriever):

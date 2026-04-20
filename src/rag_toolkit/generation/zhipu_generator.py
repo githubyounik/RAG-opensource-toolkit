@@ -4,13 +4,8 @@ from __future__ import annotations
 
 from rag_toolkit.core.types import GenerationResult, RetrievalResult
 from rag_toolkit.generation.base import Generator
+from rag_toolkit.generation.prompts import SYSTEM_PROMPT as _SYSTEM_PROMPT
 from rag_toolkit.llm import ZhipuChatClient
-
-_SYSTEM_PROMPT = (
-    "You are a helpful assistant. Answer the user's question using ONLY the provided "
-    "context. If the context does not contain enough information to answer, say so "
-    "clearly instead of guessing."
-)
 
 
 class ZhipuGenerator(Generator):

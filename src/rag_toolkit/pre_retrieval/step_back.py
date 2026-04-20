@@ -4,16 +4,8 @@ from __future__ import annotations
 
 from rag_toolkit.core.types import Query
 from rag_toolkit.pre_retrieval.base import PreRetriever
+from rag_toolkit.pre_retrieval.prompts import STEP_BACK_SYSTEM_PROMPT as _SYSTEM_PROMPT
 from rag_toolkit.pre_retrieval.query_transformer import QueryTransformer
-
-_SYSTEM_PROMPT = """
-You improve retrieval in a RAG system by generating a broader step-back query.
-
-Rewrite the user's query into a more general background query that helps
-retrieve supporting context related to the same topic.
-
-Return only the step-back query text.
-""".strip()
 
 
 class StepBackPreRetriever(PreRetriever):

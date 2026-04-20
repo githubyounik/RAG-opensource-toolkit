@@ -18,41 +18,12 @@ from dataclasses import dataclass
 
 from rag_toolkit.core.types import EvaluationResult, GenerationResult
 from rag_toolkit.evaluation.base import Evaluator
+from rag_toolkit.evaluation.prompts import (
+    CONTEXTUAL_RELEVANCY_SYSTEM_PROMPT as _CONTEXTUAL_RELEVANCY_PROMPT,
+    CORRECTNESS_SYSTEM_PROMPT as _CORRECTNESS_PROMPT,
+    FAITHFULNESS_SYSTEM_PROMPT as _FAITHFULNESS_PROMPT,
+)
 from rag_toolkit.llm import ChatLLMClient
-
-_CORRECTNESS_PROMPT = """
-You are evaluating answer correctness.
-
-Compare the generated answer against the reference answer. Focus on factual
-agreement, not wording style. Return a score between 0 and 1.
-
-Return exactly in this format:
-SCORE: <number between 0 and 1>
-REASON: <one short sentence>
-""".strip()
-
-_FAITHFULNESS_PROMPT = """
-You are evaluating answer faithfulness for a RAG system.
-
-Decide how well the generated answer is grounded in the retrieved context.
-If the answer contains claims not supported by the context, reduce the score.
-Return a score between 0 and 1.
-
-Return exactly in this format:
-SCORE: <number between 0 and 1>
-REASON: <one short sentence>
-""".strip()
-
-_CONTEXTUAL_RELEVANCY_PROMPT = """
-You are evaluating contextual relevancy for a RAG system.
-
-Decide how relevant the retrieved context is for answering the user's question.
-Return a score between 0 and 1.
-
-Return exactly in this format:
-SCORE: <number between 0 and 1>
-REASON: <one short sentence>
-""".strip()
 
 
 @dataclass(slots=True)

@@ -133,6 +133,7 @@ Responsible for file loading and turning raw files into document chunks.
 - `PropositionProcessor`: proposition-level chunking powered by an LLM
 - `create_text_processor_from_config`: chooses the chunking strategy from the config file
 - `FileLoader`, `TextProcessor`: base interfaces for indexing-related components
+- `prompts.py`: LLM prompts used by indexing components (`PROPOSITION_SYSTEM_PROMPT`)
 
 ### `embeddings`
 
@@ -160,6 +161,7 @@ Responsible for generating the final answer from retrieved context.
 - `ZhipuGenerator`: sends retrieved context and query to a ZhipuAI GLM model
 - `OpenRouterGenerator`: sends retrieved context and query to an OpenRouter chat model
 - `create_generator_from_config`: chooses the generation backend from the config file
+- `prompts.py`: LLM prompts used by generation components (`SYSTEM_PROMPT`)
 
 ### `pre_retrieval`
 
@@ -170,6 +172,7 @@ Responsible for query transformation before retrieval.
 - `HyDEPreRetriever`: generates a hypothetical answer document and uses it as retrieval text
 - `QueryTransformer`: reusable query transformation helper built on the shared LLM layer
 - `create_pre_retriever_from_config`: chooses the pre-retrieval strategy from the config file
+- `prompts.py`: LLM prompts used by pre-retrieval components (`REWRITE_SYSTEM_PROMPT`, `STEP_BACK_SYSTEM_PROMPT`, `HYDE_SYSTEM_PROMPT_TEMPLATE`)
 
 ### `llm`
 
@@ -196,11 +199,13 @@ Responsible for chaining modules together.
 - `CrossReranker`: reranks chunks with a local HuggingFace cross-encoder model; tokenises each (query, document) pair together for high-accuracy relevance scoring
 - `BiReranker`: reranks chunks with a local HuggingFace bi-encoder model; encodes query and documents separately and ranks by dot-product similarity
 - `create_post_retriever_from_config`: chooses the post-retrieval strategy from the config file
+- `prompts.py`: LLM prompts used by post-retrieval components (`CONTEXTUAL_COMPRESSION_SYSTEM_PROMPT`)
 
 `evaluation` now includes:
 
 - `DeepEvalEvaluator`: DeepEval-style evaluation for correctness, faithfulness, and contextual relevancy
 - `create_evaluator_from_config`: chooses the evaluation strategy from the config file
+- `prompts.py`: LLM prompts used by evaluation components (`CORRECTNESS_SYSTEM_PROMPT`, `FAITHFULNESS_SYSTEM_PROMPT`, `CONTEXTUAL_RELEVANCY_SYSTEM_PROMPT`)
 
 ## Project Layout
 
